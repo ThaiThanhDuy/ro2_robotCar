@@ -10,9 +10,12 @@ slam_toolbox:
     ceres_loss_function: None
 
     # ROS Parameters #
+    #use_imu_data: true
+    #imu_topic: "/imu/data"                      # -> IMU [MPU6050]
+
     odom_frame: odom                             # -> used to track the robot's position over time.
     map_frame: map                               # -> used as a reference for the generated map.
-    base_frame: base_link                     #-> represents the robot's physical reference point.
+    base_frame: base_link                        # -> represents the robot's physical reference point.
     scan_topic: /scan
     use_map_saver: true
     mode: mapping                                # 'mapping' for creating a new map or 'localization' for using an existing map.

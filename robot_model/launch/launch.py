@@ -10,7 +10,7 @@ import os
 def generate_launch_description():
    
     rviz_config_dir = os.path.join(
-            get_package_share_directory('main'),
+            get_package_share_directory('robot_model'),
             'rviz',
             'robot.rviz')
     return LaunchDescription([
