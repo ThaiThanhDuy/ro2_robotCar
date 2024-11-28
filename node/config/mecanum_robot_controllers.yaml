@@ -1,0 +1,33 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 100
+
+    joint_state_controller:
+      type: joint_state_controller/JointStateController
+      publish_rate: 50
+
+    joint_velocity_controller:
+      type: velocity_controllers/JointVelocityController
+      joints:
+        - joint_front_left
+        - joint_front_right
+        - joint_back_left
+        - joint_back_right
+      command_interfaces:
+        - velocity
+      state_interfaces:
+        - position
+        - velocity
+
+    joint_position_controller:
+      type: position_controllers/JointPositionController
+      joints:
+        - joint_front_left
+        - joint_front_right
+        - joint_back_left
+        - joint_back_right
+      command_interfaces:
+        - position
+      state_interfaces:
+        - position
+        - velocity

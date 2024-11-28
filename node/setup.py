@@ -25,7 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             'tf_publisher = node.tf_publisher:main',  
-            'robot_state_publisher_node = node.robot_state_publisher_node:main',  
+            'twist_publisher = node.twist_publisher:main',  
+            'stm32_interface = node.stm32_interface:main',  
         ],
     },
     
