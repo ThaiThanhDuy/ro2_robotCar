@@ -4,6 +4,7 @@ from sensor_msgs.msg import JointState
 from geometry_msgs.msg import TransformStamped
 from tf2_ros import TransformBroadcaster
 import math
+import serial  # Make sure to install pyserial if you haven't already
 
 class JointStatePublisher(Node):
     def __init__(self):
@@ -24,49 +25,75 @@ class JointStatePublisher(Node):
         self.base_link_y = 0.0
         self.base_link_z = 0.0
         self.orientation = 0.0  # Orientation in radians
+        
+        # Initialize linear and angular velocities
+        self.linear_x = 0.0
+        self.linear_y = 0.0 
+        self.angular_z = 0.0
 
         # Robot parameters
         self.wheel_base = 0.38  # Distance between left and right wheels (in meters)
         self.track_width = 0.3  # Distance between front and rear wheels (in meters)
         self.wheel_radius = 0.48  # Radius of the wheels (in meters)
 
+        # Initialize UART
+        self.serial_port = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)  # Adjust the port and baud rate as needed
+        self.timer_uart = self.create_timer(0.1, self.read_uart)  # Read UART every 0.1 seconds
+
     def publish_joint_state(self):
-        # Here you can set desired linear and angular velocities
-        linear_x = 0.1  # Forward speed in meters per second
-        linear_y = 0.0  # Strafe speed in meters per second
-        angular_z = 0.0  # Rotation speed in radians per second (change this to test rotation)
-
-        # Calculate wheel speeds based on the desired velocities
-        front_left_speed = (linear_x - linear_y - (self.wheel_base * angular_z)) / self.wheel_radius
-        front_right_speed = (linear_x + linear_y + (self.wheel_base * angular_z)) / self.wheel_radius
-        rear_left_speed = (linear_x + linear_y - (self.wheel_base * angular_z)) / self.wheel_radius
-        rear_right_speed = (linear_x - linear_y + (self.wheel_base * angular_z)) / self.wheel_radius
-
-        # Update joint positions based on calculated speeds
-        self.joint_state_msg.position[0] += front_left_speed * 0.1  # Increment left wheel joint 1 position
-        self.joint_state_msg.position[1] += rear_left_speed * 0.1  # Increment left wheel joint 2 position
-        self.joint_state_msg.position[2] += front_right_speed * 0.1  # Increment right wheel joint 1 position
-        self.joint_state_msg.position[3] += rear_right_speed * 0.1  # Increment right wheel joint 2 position
-
-        # Update velocities
-        self.joint_state_msg.velocity[0] = front_left_speed
-        self.joint_state_msg.velocity[1] = rear_left_speed
-        self.joint_state_msg.velocity[2] = front_right_speed
-        self.joint_state_msg.velocity[3] = rear_right_speed
-
-        # Update the timestamp
-        self.joint_state_msg.header.stamp = self.get_clock().now().to_msg()
-
         # Publish the joint state message
+        self.joint_state_msg.header.stamp = self.get_clock().now().to_msg()
         self.publisher_.publish(self.joint_state_msg)
 
         # Update base_link position and orientation based on wheel movements
-        self.update_base_link_position(linear_x, linear_y, angular_z)
+        self.update_base_link_position(self.linear_x, self.linear_y, self.angular_z)
 
         # Create and publish the transform
         self.publish_transform()
 
         self.get_logger().info(f'Publishing: Position: {self.joint_state_msg.position}, Velocity: {self.joint_state_msg.velocity}, Base Link Position: ({self.base_link_x}, {self.base_link_y}, {self.base_link_z}), Orientation: {self.orientation}')
+
+    def read_uart(self):
+        # Read data from UART and update joint states
+        if self.serial_port.in_waiting > 0:
+            data = self.serial_port.readline().decode('utf-8').strip()
+            self.get_logger().info(f"Received data: {data}")  # Log the received data
+
+            # Example expected data format: "pos1:1.0 vel1:0.5 pos2:-1.0 vel2:0.3 pos3:0.0 vel3:0.0 pos4:0.0 vel4:0.0"
+            try:
+                # Split the data by spaces
+                parts = data.split()
+                pos = []
+                vel = []
+
+                # Extract position and velocity values
+                for part in parts:
+                    if part.startswith('pos'):
+                        pos_value = float(part.split(':')[1])
+                        pos.append(pos_value)
+                    elif part.startswith('vel'):
+                        vel_value = float(part.split(':')[1])
+                        vel.append(vel_value)
+
+                # Update joint states if we have exactly 4 positions and 4 velocities
+                if len(pos) == 4 and len(vel) == 4:
+                    #self.joint_state_msg.position = pos
+                    #self.joint_state_msg.velocity = vel
+                    self.joint_state_msg.position = [round(p, 6) for p in pos]
+                    self.joint_state_msg.velocity = [round(v, 6) for v in vel]
+                    self.joint_state_msg.header.stamp = self.get_clock().now().to_msg()  # Update timestamp
+
+                    # Calculate linear and angular velocities
+                    self.linear_x = (vel[0] + vel[1] + vel[2] + vel[3]) / (4 * self.wheel_radius)
+                    self.linear_y = (-vel[0] + vel[1] + vel[2] - vel[3]) / (4 * self.wheel_radius)
+                    self.angular_z = (-vel[0] + vel[1] - vel[2] + vel[3]) / (4 * self.wheel_base)
+
+                    self.publish_joint_state()
+                else:
+                    self.get_logger().error("Received data does not contain exactly 4 positions and 4 velocities.")
+
+            except ValueError as e:
+                self.get_logger().error(f"Error parsing data: {e}")
 
     def update_base_link_position(self, linear_x, linear_y, angular_z):
         # Update base_link position based on the desired linear and angular velocities
