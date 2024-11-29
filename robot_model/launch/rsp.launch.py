@@ -29,7 +29,7 @@ def generate_launch_description():
         parameters=[params]
     )
     joint_state_publisher_node = Node(
-        package='joint_state_publisher',
+        package='node',
         executable='joint_state_publisher',
         output='screen',
         parameters=[params]

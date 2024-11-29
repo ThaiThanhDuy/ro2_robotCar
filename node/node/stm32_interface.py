@@ -3,20 +3,17 @@ from rclpy.node import Node
 from sensor_msgs.msg import JointState
 import serial
 import tkinter as tk
+from tkinter import messagebox
 from threading import Thread
+import serial.tools.list_ports  # Import for listing COM ports
 
 class STM32Interface(Node):
     def __init__(self):
         super().__init__('stm32_interface')
         self.joint_state_pub = self.create_publisher(JointState, '/joint_states', 10)
-        
-        # Open UART connection
-        try:
-            self.serial_port = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
-            self.get_logger().info("UART connection established.")
-        except serial.SerialException as e:
-            self.get_logger().error(f"Failed to open UART: {e}")
-            rclpy.shutdown()
+
+        # Initialize serial port
+        self.serial_port = None
 
         # Define joint names and initial states
         self.joint_state = JointState()
@@ -28,6 +25,7 @@ class STM32Interface(Node):
         self.create_timer(0.1, self.read_uart)
 
         # Start the GUI in a separate thread
+        self.command_in_progress = False  # State variable
         self.start_gui_thread()
 
     def start_gui_thread(self):
@@ -40,34 +38,90 @@ class STM32Interface(Node):
         self.root = tk.Tk()
         self.root.title("Mecanum Drive Control")
 
+        # Dropdown to select COM port
+        tk.Label(self.root, text="Select COM Port:").grid(row=0, column=0)
+        self.com_ports = self.list_com_ports()
+        self.selected_port = tk.StringVar(self.root)
+        self.selected_port.set(self.com_ports[0])  # Default to first port
+
+        self.port_menu = tk.OptionMenu(self.root, self.selected_port, *self.com_ports)
+        self.port_menu.grid(row=0, column=1)
+
+        # Button to open the selected port
+        open_port_button = tk.Button(self.root, text="Open Port", command=self.open_port)
+        open_port_button.grid(row=0, column=2)
+
         # Input fields for linear x, y and angular z
-        tk.Label(self.root, text="Linear X:").grid(row=0, column=0)
+        tk.Label(self.root, text="Linear X:").grid(row=1, column=0)
         self.linear_x_entry = tk.Entry(self.root)
-        self.linear_x_entry.grid(row=0, column=1)
+        self.linear_x_entry.grid(row=1, column=1)
 
-        tk.Label(self.root, text="Linear Y:").grid(row=1, column=0)
+        tk.Label(self.root, text="Linear Y:").grid(row=2, column=0)
         self.linear_y_entry = tk.Entry(self.root)
-        self.linear_y_entry.grid(row=1, column=1)
+        self.linear_y_entry.grid(row=2, column=1)
 
-        tk.Label(self.root, text="Angular Z:").grid(row=2, column=0)
+        tk.Label(self.root, text="Angular Z:").grid(row=3, column=0)
         self.angular_z_entry = tk.Entry(self.root)
-        self.angular_z_entry.grid(row=2, column=1)
+        self.angular_z_entry.grid(row=3, column=1)
 
         # Button to send command
         send_button = tk.Button(self.root, text="Send Command", command=self.send_command)
-        send_button.grid(row=3, columnspan=2)
+        send_button.grid(row=4, columnspan=3)
+
+        # Button to close the GUI
+        close_button = tk.Button(self.root, text="Close", command=self.close_gui)
+        close_button.grid(row=5, columnspan=3)
 
         # Start the Tkinter main loop
         self.root.mainloop()
 
-    def send_command(self):
+    def list_com_ports(self):
+        """List available COM ports."""
+        ports = serial.tools.list_ports.comports()
+        return [port.device for port in ports]
+
+    def open_port(self):
+        """Open the selected COM port."""
+        if self.serial_port is not None and self.serial_port.is_open:
+            self.get_logger().warn("Port already open.")
+            return
+
+        selected = self.selected_port.get()
         try:
+            self.serial_port = serial.Serial(selected, 115200, timeout=1)
+            self.get_logger().info(f"Opened port: {selected}")
+            messagebox.showinfo("Connection", f"Connected to {selected} successfully!")
+        except serial.SerialException as e:
+            self.get_logger().error(f"Failed to open port: {e}")
+            messagebox.showerror("Connection Error", f"Failed to open port: {e}")
+
+    def close_gui(self):
+        """Close the GUI and perform cleanup."""
+        self.get_logger().info("Closing GUI...")
+        if self.serial_port and self.serial_port.is_open:
+            self.serial_port.close()  # Close the serial port
+        self.root.quit()  # Exit the Tkinter main loop
+        rclpy.shutdown()  # Shutdown ROS 2
+
+    def send_command(self):
+        if self.command_in_progress:
+            self.get_logger().warn("Previous command still in progress. Please wait.")
+            return
+
+        # Check if the serial port is open
+        if self.serial_port is None or not self.serial_port.is_open:
+            self.get_logger().warn("Cannot send command: Port is not open.")
+            messagebox.showwarning("Warning", "Cannot send command: Port is not open. Please open a port first.")
+            return
+
+        self.command_in_progress = True
+        try:
+            # Clear previous command by sending a stop command (if necessary)
+
+            # Now send the new command
             wheel_radius = 0.1  # Adjust to your robot's wheel radius
             wheel_base = 0.5     # Distance between front and rear wheels
 
-            # Calculate wheel velocities for mecanum drive
-
-            
             v_x = float(self.linear_x_entry.get())
             v_y = float(self.linear_y_entry.get())
             v_theta = float(self.angular_z_entry.get())
@@ -75,65 +129,65 @@ class STM32Interface(Node):
             front_right_velocity = (v_x + v_y + (wheel_base * v_theta)) / wheel_radius
             rear_left_velocity = (v_x + v_y - (wheel_base * v_theta)) / wheel_radius
             rear_right_velocity = (v_x - v_y + (wheel_base * v_theta)) / wheel_radius
-            # Calculate wheel velocities
-            v_FL = front_left_velocity  # Front Left
-            v_FR = front_right_velocity # Front Right
-            v_BL = rear_left_velocity  # Back Left
-            v_BR = rear_right_velocity  # Back Right
 
             # Normalize wheel speeds if necessary
-            max_speed = max(abs(v_FL), abs(v_FR), abs(v_BL), abs(v_BR))
+            max_speed = max(abs(front_left_velocity), abs(front_right_velocity), abs(rear_left_velocity), abs(rear_right_velocity))
             if max_speed > 1.0:  # Assuming the maximum speed is 1.0
-                v_FL /= max_speed
-                v_FR /= max_speed
-                v_BL /= max_speed
-                v_BR /= max_speed
+                front_left_velocity /= max_speed
+                front_right_velocity /= max_speed
+                rear_left_velocity /= max_speed
+                rear_right_velocity /= max_speed
 
-            # Send the command to STM32
-            command = f"cmd: FL:{v_FL} FR:{v_FR} BL:{v_BL} BR:{v_BR}\n"
-            self.serial_port.write(command.encode('utf-8'))
+            # Send the new command to STM32
+            command = f"{front_left_velocity},{front_right_velocity},{rear_left_velocity},{rear_right_velocity}\n"  # Added newline
+            self.serial_port.write(command.encode())
             self.get_logger().info(f"Command sent: {command.strip()}")
+
         except ValueError:
             self.get_logger().error("Invalid input. Please enter numeric values.")
+        finally:
+            self.command_in_progress = False  # Reset the state variable
 
     def read_uart(self):
-        try:
-            if self.serial_port.in_waiting > 0:
-                line = self.serial_port.readline().decode('utf-8').strip()
-                # Parse the line to extract positions and velocities
-                data = line.split()
-                pos1 = float(data[0].split(':')[1])
-                vel1 = float(data[1].split(':')[1])
-                pos2 = float(data[2].split(':')[1])
-                vel2 = float(data[3].split(':')[1])
-                pos3 = float(data[4].split(':')[1])
-                vel3 = float(data[5].split(':')[1])
-                pos4 = float(data[6].split(':')[1])
-                vel4 = float(data[7].split(':')[1])
+        # Read data from UART and publish joint states
+        if self.serial_port and self.serial_port.in_waiting > 0:
+            data = self.serial_port.readline().decode('utf-8').strip()
+            self.get_logger().info(f"Received data: {data}")  # Log the received data
 
-                # Update joint state
-                self.joint_state.position = [pos1, pos2, pos3, pos4]
-                self.joint_state.velocity = [vel1, vel2, vel3, vel4]
+            # Example expected data format: "pos1:1.0 vel1:0.5 pos2:-1.0 vel2:0.3 pos3:0.0 vel3:0.0 pos4:0.0 vel4:0.0"
+          
+            try:
+                # Split the data by spaces
+                parts = data.split()
+                pos = []
+                vel = []
 
-                # Publish joint states
-                self.joint_state_pub.publish(self.joint_state)
-        except Exception as e:
-            self.get_logger().error(f"Error reading from UART: {e}")
+                # Extract position and velocity values
+                for part in parts:
+                    if part.startswith('pos'):
+                        pos_value = float(part.split(':')[1])
+                        pos.append(pos_value)
+                    elif part.startswith('vel'):
+                        vel_value = float(part.split(':')[1])
+                        vel.append(vel_value)
 
-    def destroy_node(self):
-        if self.serial_port.is_open:
-            self.serial_port.close()
-            self.get_logger().info("UART connection closed.")
-        super().destroy_node()
+                # Update joint states if we have exactly 4 positions and 4 velocities
+                if len(pos) == 4 and len(vel) == 4:
+                    self.joint_state.position = pos
+                    self.joint_state.velocity = vel
+                    self.joint_state.header.stamp = self.get_clock().now().to_msg()  # Update timestamp
+                    self.joint_state_pub.publish(self.joint_state)
+                    #self.get_logger().info(f"Joint states published: {self.joint_state}")
+                else:
+                    self.get_logger().error("Received data does not contain exactly 4 positions and 4 velocities.")
+
+            except ValueError as e:
+                self.get_logger().error(f"Error parsing data: {e}")
 
 def main(args=None):
     rclpy.init(args=args)
     stm32_interface = STM32Interface()
-    try:
-        rclpy.spin(stm32_interface)
-    except KeyboardInterrupt:
-        pass
-   
+    rclpy.spin(stm32_interface)
     stm32_interface.destroy_node()
     rclpy.shutdown()
 
