@@ -15,7 +15,7 @@ class JointStatePublisher(Node):
 
         # Joint state initialization
         self.joint_state_msg = JointState()
-        self.joint_state_msg.name = ['left_wheel_joint_1', 'left_wheel_joint_2', 'right_wheel_joint_1', 'right_wheel_joint_2']
+        self.joint_state_msg.name = ['left_wheel_joint_1', 'right_wheel_joint_1', 'left_wheel_joint_2', 'right_wheel_joint_2']
         self.joint_state_msg.position = [0.0, 0.0, 0.0, 0.0]  # Initial positions
         self.joint_state_msg.velocity = [0.0, 0.0, 0.0, 0.0]  # Initial velocities
 
@@ -35,11 +35,11 @@ class JointStatePublisher(Node):
         # Robot parameters
         self.wheel_base = 0.38  # Distance between left and right wheels (in meters)
         self.track_width = 0.3  # Distance between front and rear wheels (in meters)
-        self.wheel_radius = 0.48  # Radius of the wheels (in meters)
+        self.wheel_radius = 0.05  # Radius of the wheels (in meters)
 
         # Initialize UART
         self.serial_port = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)  # Adjust the port and baud rate as needed
-        self.timer_uart = self.create_timer(0.01, self.read_uart)  # Read UART every 0.01 seconds
+        self.timer_uart = self.create_timer(0.05, self.read_uart)  # Read UART every 0.01 seconds
 
         # Smoothing parameters
         self.alpha = 0.1  # Smoothing factor (0 < alpha < 1)
@@ -58,7 +58,7 @@ class JointStatePublisher(Node):
         self.publish_transform()
 
         self.get_logger().info(f'Publishing: Position: {self.joint_state_msg.position}, Velocity: {self.joint_state_msg.velocity}, Base Link Position: ({self.base_link_x}, {self.base_link_y}, {self.base_link_z}), Orientation: {self.orientation}')
-
+        self.get_logger().info(f'Publishing: XYZ: {self.linear_x},{self.linear_y},{self.angular_z}')
     def read_uart(self):
         # Read data from UART and update joint states
         if self.serial_port.in_waiting > 0:
@@ -85,10 +85,10 @@ class JointStatePublisher(Node):
                 if len(pos) == 4 and len(vel) == 4:
                     # Apply exponential smoothing
                     self.joint_state_msg.position = [
-                        round(self.alpha * p + (1 - self.alpha) * pp * 100.0, 6) for p, pp in zip(pos, self.prev_position)
+                        round(self.alpha * p + (1 - self.alpha) * pp * 1.5, 3) for p, pp in zip(pos, self.prev_position)
                     ]
                     self.joint_state_msg.velocity = [
-                        round(self.alpha * v + (1 - self.alpha) * pv, 6) for v, pv in zip(vel, self.prev_velocity)
+                        round(self.alpha * v + (1 - self.alpha) * pv, 3) for v, pv in zip(vel, self.prev_velocity)
                     ]
                     self.joint_state_msg.header.stamp = self.get_clock().now().to_msg()  # Update timestamp
 
@@ -113,13 +113,13 @@ class JointStatePublisher(Node):
 
     def update_base_link_position(self, linear_x, linear_y, angular_z):
         # Update base_link position based on the desired linear and angular velocities
-        dt = 0.1  # Time step
+        dt = 0.01  # Time step
         self.orientation += angular_z * dt  # Update orientation
         self.base_link_x += (linear_x * math.cos(self.orientation) - linear_y * math.sin(self.orientation)) * dt
         self.base_link_y += (linear_x * math.sin(self.orientation) + linear_y * math.cos(self.orientation)) * dt
         # Assuming constant height for simplicity
         self.base_link_z = 0.0
-
+      
     def publish_transform(self):
         # Create a TransformStamped message
         t = TransformStamped()

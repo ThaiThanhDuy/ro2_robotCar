@@ -35,7 +35,13 @@ def generate_launch_description():
         parameters=[params]
     )
 
-
+  
+    stm32_interface_node = Node(
+        package='node',
+        executable='stm32_interface',
+        output='screen',
+        parameters=[params]
+    )
     # Launch!
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -44,5 +50,6 @@ def generate_launch_description():
             description='Use sim time if true'),
 
         node_robot_state_publisher,
-        joint_state_publisher_node
+        joint_state_publisher_node,
+        stm32_interface_node
     ])

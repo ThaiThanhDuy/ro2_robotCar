@@ -111,7 +111,7 @@ class STM32Interface(Node):
             # Clear previous command by sending a stop command (if necessary)
 
             # Now send the new command
-            wheel_radius = 0.1  # Adjust to your robot's wheel radius
+            wheel_radius = 0.05  # Adjust to your robot's wheel radius
             wheel_base = 0.5     # Distance between front and rear wheels
 
             v_x = float(self.linear_x_entry.get())
