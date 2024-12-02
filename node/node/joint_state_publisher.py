@@ -19,7 +19,7 @@ class JointStatePublisher(Node):
         self.joint_state_msg.position = [0.0, 0.0, 0.0, 0.0]  # Initial positions
         self.joint_state_msg.velocity = [0.0, 0.0, 0.0, 0.0]  # Initial velocities
 
-        self.timer = self.create_timer(0.05, self.publish_joint_state)  # Publish every 0.05 seconds
+        self.timer = self.create_timer(0.1, self.publish_joint_state)  # Publish every 0.05 seconds
 
         # Initialize base_link position and orientation
         self.base_link_x = 0.0
@@ -35,11 +35,11 @@ class JointStatePublisher(Node):
         # Robot parameters
         self.wheel_base = 0.38  # Distance between left and right wheels (in meters)
         self.track_width = 0.3  # Distance between front and rear wheels (in meters)
-        self.wheel_radius = 0.05  # Radius of the wheels (in meters)
+        self.wheel_radius = 0.0485  # Radius of the wheels (in meters)
 
         # Initialize UART
         self.serial_port = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)  # Adjust the port and baud rate as needed
-        self.timer_uart = self.create_timer(0.05, self.read_uart)  # Read UART every 0.01 seconds
+        self.timer_uart = self.create_timer(0.1, self.read_uart)  # Read UART every 0.01 seconds
 
         # Smoothing parameters
         self.alpha = 0.1  # Smoothing factor (0 < alpha < 1)
@@ -85,7 +85,7 @@ class JointStatePublisher(Node):
                 if len(pos) == 4 and len(vel) == 4:
                     # Apply exponential smoothing
                     self.joint_state_msg.position = [
-                        round(self.alpha * p + (1 - self.alpha) * pp * 1.5, 3) for p, pp in zip(pos, self.prev_position)
+                        round(self.alpha * p + (1 - self.alpha) * pp, 3) for p, pp in zip(pos, self.prev_position)
                     ]
                     self.joint_state_msg.velocity = [
                         round(self.alpha * v + (1 - self.alpha) * pv, 3) for v, pv in zip(vel, self.prev_velocity)

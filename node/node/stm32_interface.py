@@ -124,17 +124,19 @@ class STM32Interface(Node):
 
             # Normalize wheel speeds if necessary
             max_speed = max(abs(front_left_velocity), abs(front_right_velocity), abs(rear_left_velocity), abs(rear_right_velocity))
-            if max_speed > 1.0:  # Assuming the maximum speed is 1.0
-                front_left_velocity /= max_speed
-                front_right_velocity /= max_speed
-                rear_left_velocity /= max_speed
-                rear_right_velocity /= max_speed
+            if max_speed > 0.27:  # Assuming the maximum speed is 0.27
+                scale_factor = 0.27 / max_speed  # Calculate scale factor
+                front_left_velocity *= scale_factor *2.0
+                front_right_velocity *= scale_factor *2.0
+                rear_left_velocity *= scale_factor *2.0
+                rear_right_velocity *= scale_factor*2.0
 
             # Round velocities to two decimal places
             front_left_velocity = round(front_left_velocity, 2)
             front_right_velocity = round(front_right_velocity, 2)
             rear_left_velocity = round(rear_left_velocity, 2)
             rear_right_velocity = round(rear_right_velocity, 2)
+
             # Send the new command to STM32
             command = f"c:{front_left_velocity},{front_right_velocity},{rear_left_velocity},{rear_right_velocity}\n"  # Added newline
             self.serial_port.write(command.encode())
