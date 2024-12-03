@@ -111,25 +111,30 @@ class STM32Interface(Node):
             # Clear previous command by sending a stop command (if necessary)
 
             # Now send the new command
-            wheel_radius = 0.05  # Adjust to your robot's wheel radius
-            wheel_base = 0.5     # Distance between front and rear wheels
+            wheel_radius = 0.35  # Adjust to your robot's wheel radius
+            wheel_base = 0.45     # Distance between front and rear wheels
 
             v_x = float(self.linear_x_entry.get())
             v_y = float(self.linear_y_entry.get())
             v_theta = float(self.angular_z_entry.get())
-            front_left_velocity =  (v_x - v_y - (wheel_base * v_theta)) / wheel_radius
-            front_right_velocity = (v_x + v_y + (wheel_base * v_theta)) / wheel_radius
-            rear_left_velocity = (v_x + v_y - (wheel_base * v_theta)) / wheel_radius
-            rear_right_velocity = (v_x - v_y + (wheel_base * v_theta)) / wheel_radius
+            front_left_velocity =  (v_x - v_y - (wheel_base * v_theta/2))  
+            front_right_velocity = (v_x + v_y + (wheel_base * v_theta/2)) 
+            rear_left_velocity = (v_x + v_y - (wheel_base * v_theta/2)) 
+            rear_right_velocity = (v_x - v_y + (wheel_base * v_theta/2)) 
 
-            # Normalize wheel speeds if necessary
-            max_speed = max(abs(front_left_velocity), abs(front_right_velocity), abs(rear_left_velocity), abs(rear_right_velocity))
-            if max_speed > 0.27:  # Assuming the maximum speed is 0.27
-                scale_factor = 0.27 / max_speed  # Calculate scale factor
-                front_left_velocity *= scale_factor *2.0
-                front_right_velocity *= scale_factor *2.0
-                rear_left_velocity *= scale_factor *2.0
-                rear_right_velocity *= scale_factor*2.0
+                 # Check if velocities are within the range -0.27 to 0.27
+            if (abs(front_left_velocity) > 0.27 or
+                abs(front_right_velocity) > 0.27 or
+                abs(rear_left_velocity) > 0.27 or
+                abs(rear_right_velocity) > 0.27):
+                self.get_logger().warn("One or more velocities are out of range. Command not sent.")
+                return  # Skip sending the command if any velocity is out of range
+
+            
+            front_left_velocity *= 2.0
+            front_right_velocity *= 2.0
+            rear_left_velocity *= 2.0
+            rear_right_velocity *= 2.0
 
             # Round velocities to two decimal places
             front_left_velocity = round(front_left_velocity, 2)

@@ -6,6 +6,7 @@ from tf2_ros import TransformBroadcaster
 import math
 import serial  # Make sure to install pyserial if you haven't already
 from collections import deque
+import threading
 
 class JointStatePublisher(Node):
     def __init__(self):
@@ -19,7 +20,7 @@ class JointStatePublisher(Node):
         self.joint_state_msg.position = [0.0, 0.0, 0.0, 0.0]  # Initial positions
         self.joint_state_msg.velocity = [0.0, 0.0, 0.0, 0.0]  # Initial velocities
 
-        self.timer = self.create_timer(0.1, self.publish_joint_state)  # Publish every 0.05 seconds
+        self.timer = self.create_timer(0.05, self.publish_joint_state)  # Publish every 0.05 seconds
 
         # Initialize base_link position and orientation
         self.base_link_x = 0.0
@@ -39,7 +40,14 @@ class JointStatePublisher(Node):
 
         # Initialize UART
         self.serial_port = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)  # Adjust the port and baud rate as needed
-        self.timer_uart = self.create_timer(0.1, self.read_uart)  # Read UART every 0.01 seconds
+        
+        # Buffer for incoming data
+        self.data_buffer = deque(maxlen=10)  # Adjust the size as needed
+        self.lock = threading.Lock()
+        
+        # Start a thread to read UART data
+        self.reading_thread = threading.Thread(target=self.read_uart, daemon=True)
+        self.reading_thread.start()
 
         # Smoothing parameters
         self.alpha = 0.1  # Smoothing factor (0 < alpha < 1)
@@ -47,6 +55,12 @@ class JointStatePublisher(Node):
         self.prev_velocity = [0.0, 0.0, 0.0, 0.0]
 
     def publish_joint_state(self):
+        # Check if there's data to process
+        with self.lock:
+            if self.data_buffer:
+                data = self.data_buffer.popleft()
+                self.process_uart_data(data)
+
         # Publish the joint state message
         self.joint_state_msg.header.stamp = self.get_clock().now().to_msg()
         self.publisher_.publish(self.joint_state_msg)
@@ -58,58 +72,62 @@ class JointStatePublisher(Node):
         self.publish_transform()
 
         self.get_logger().info(f'Publishing: Position: {self.joint_state_msg.position}, Velocity: {self.joint_state_msg.velocity}, Base Link Position: ({self.base_link_x}, {self.base_link_y}, {self.base_link_z}), Orientation: {self.orientation}')
-        self.get_logger().info(f'Publishing: XYZ: {self.linear_x},{self.linear_y},{self.angular_z}')
+        self.get_logger().info(f'Publishing: XYZ: {self.linear_x},{ self.linear_y},{self.angular_z}')
+
     def read_uart(self):
-        # Read data from UART and update joint states
-        if self.serial_port.in_waiting > 0:
-            data = self.serial_port.readline().decode('utf-8').strip()
-            self.get_logger().info(f"Received data: {data}")  # Log the received data
+        while rclpy.ok():
+            if self.serial_port.in_waiting > 0:
+                data = self.serial_port.readline().decode('utf-8').strip()
+                self.get_logger().info(f"Received data: {data}")  # Log the received data
 
-            # Example expected data format: "pos1:1.0 vel1:0.5 pos2:-1.0 vel2:0.3 pos3:0.0 vel3:0.0 pos4:0.0  vel4:0.0"
-            try:
-                # Split the data by spaces
-                parts = data.split()
-                pos = []
-                vel = []
+                with self.lock:
+                    self.data_buffer.append(data)
 
-                # Extract position and velocity values
-                for part in parts:
-                    if part.startswith('pos'):
-                        pos_value = float(part.split(':')[1])
-                        pos.append(pos_value)
-                    elif part.startswith('vel'):
-                        vel_value = float(part.split(':')[1])
-                        vel.append(vel_value)
+    def process_uart_data(self, data):
+        # Example expected data format: "pos1:1.0 vel1:0.5 pos2:-1.0 vel2:0.3 pos3:0.0 vel3:0.0 pos4:0.0 vel4:0.0"
+        try:
+            # Split the data by spaces
+            parts = data.split()
+            pos = []
+            vel = []
 
-                # Update joint states if we have exactly 4 positions and 4 velocities
-                if len(pos) == 4 and len(vel) == 4:
-                    # Apply exponential smoothing
-                    self.joint_state_msg.position = [
-                        round(self.alpha * p + (1 - self.alpha) * pp, 3) for p, pp in zip(pos, self.prev_position)
-                    ]
-                    self.joint_state_msg.velocity = [
-                        round(self.alpha * v + (1 - self.alpha) * pv, 3) for v, pv in zip(vel, self.prev_velocity)
-                    ]
-                    self.joint_state_msg.header.stamp = self.get_clock().now().to_msg()  # Update timestamp
+            # Extract position and velocity values
+            for part in parts:
+                if part.startswith('pos'):
+                    pos_value = float(part.split(':')[1])
+                    pos.append(pos_value)
+                elif part.startswith('vel'):
+                    vel_value = float(part.split(':')[1])
+                    vel.append(vel_value)
 
-                    # Update previous values for the next iteration
-                    self.prev_position = self.joint_state_msg.position
-                    self.prev_velocity = self.joint_state_msg.velocity
+            # Update joint states if we have exactly 4 positions and 4 velocities
+            if len(pos) == 4 and len(vel) == 4:
+                # Apply exponential smoothing
+                self.joint_state_msg.position = [
+                    round(self.alpha * p + (1 - self.alpha) * pp, 2) for p, pp in zip(pos, self.prev_position)
+                ]
+                self.joint_state_msg.velocity = [
+                    round(self.alpha * v + (1 - self.alpha) * pv, 2) for v, pv in zip(vel, self.prev_velocity)
+                ]
+                self.joint_state_msg.header.stamp = self.get_clock().now().to_msg()  # Update timestamp
 
-                    # Calculate linear and angular velocities
-                    self.linear_x = (self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
-                                     self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
-                    self.linear_y = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
-                                     self.joint_state_msg.velocity[2] - self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
-                    self.angular_z = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] -
-                                      self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * self.wheel_base)
+                # Update previous values for the next iteration
+                self.prev_position = self.joint_state_msg.position
+                self.prev_velocity = self.joint_state_msg.velocity
 
-                    self.publish_joint_state()
-                else:
-                    self.get_logger().error("Received data does not contain exactly 4 positions and 4 velocities.")
+                # Calculate linear and angular velocities
+                self.linear_x = (self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
+                                 self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
+                self.linear_y = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
+                                 self.joint_state_msg.velocity[2] - self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
+                self.angular_z = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] -
+                                  self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * self.wheel_base)
 
-            except ValueError as e:
-                self.get_logger().error(f"Error parsing data: {e}")
+            else:
+                self.get_logger().error("Received data does not contain exactly 4 positions and 4 velocities.")
+
+        except ValueError as e:
+            self.get_logger().error(f"Error parsing data: {e}")
 
     def update_base_link_position(self, linear_x, linear_y, angular_z):
         # Update base_link position based on the desired linear and angular velocities
