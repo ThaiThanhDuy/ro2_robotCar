@@ -15,11 +15,6 @@ class STM32Interface(Node):
         # Initialize serial port
         self.serial_port = None
 
-        # Define joint names and initial states
-        self.joint_state = JointState()
-        self.joint_state.name = ['front_left_wheel', 'front_right_wheel', 'back_left_wheel', 'back_right_wheel']
-        self.joint_state.position = [0.0, 0.0, 0.0, 0.0]
-        self.joint_state.velocity = [0.0, 0.0, 0.0, 0.0]
 
         # Start the GUI in a separate thread
         self.command_in_progress = False  # State variable

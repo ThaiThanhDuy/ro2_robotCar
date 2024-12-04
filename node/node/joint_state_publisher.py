@@ -53,6 +53,8 @@ class JointStatePublisher(Node):
         self.alpha = 0.1  # Smoothing factor (0 < alpha < 1)
         self.prev_position = [0.0, 0.0, 0.0, 0.0]
         self.prev_velocity = [0.0, 0.0, 0.0, 0.0]
+     # Previous joint positions for comparison
+        self.prev_joint_positions = [0.0, 0.0, 0.0, 0.0]
 
     def publish_joint_state(self):
         # Check if there's data to process
@@ -64,9 +66,19 @@ class JointStatePublisher(Node):
         # Publish the joint state message
         self.joint_state_msg.header.stamp = self.get_clock().now().to_msg()
         self.publisher_.publish(self.joint_state_msg)
+        
+           # Update base_link position and orientation only if there's a change
+      # Check if joint positions have changed
+        if self.joint_state_msg.position != self.prev_joint_positions:
+        
 
+ # Update previous joint positions after the update
+            self.prev_joint_positions = list(self.joint_state_msg.position)  # Convert to list
+
+            # Update base_link position and orientation
+            self.update_base_link_position(self.linear_x, self.linear_y, self.angular_z)
         # Update base_link position and orientation based on wheel movements
-        self.update_base_link_position(self.linear_x, self.linear_y, self.angular_z)
+        #self.update_base_link_position(self.linear_x, self.linear_y, self.angular_z)
 
         # Create and publish the transform
         self.publish_transform()
