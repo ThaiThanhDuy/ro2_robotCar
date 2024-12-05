@@ -50,10 +50,10 @@ class JointStatePublisher(Node):
         self.reading_thread.start()
 
         # Smoothing parameters
-        self.alpha = 0.1  # Smoothing factor (0 < alpha < 1)
+        self.alpha = 0.5  # Smoothing factor (0 < alpha < 1)
         self.prev_position = [0.0, 0.0, 0.0, 0.0]
         self.prev_velocity = [0.0, 0.0, 0.0, 0.0]
-     # Previous joint positions for comparison
+        # Previous joint positions for comparison
         self.prev_joint_positions = [0.0, 0.0, 0.0, 0.0]
 
     def publish_joint_state(self):
@@ -67,29 +67,24 @@ class JointStatePublisher(Node):
         self.joint_state_msg.header.stamp = self.get_clock().now().to_msg()
         self.publisher_.publish(self.joint_state_msg)
         
-           # Update base_link position and orientation only if there's a change
-      # Check if joint positions have changed
+        # Update base_link position and orientation only if there's a change
         if self.joint_state_msg.position != self.prev_joint_positions:
-        
-
- # Update previous joint positions after the update
+            # Update previous joint positions after the update
             self.prev_joint_positions = list(self.joint_state_msg.position)  # Convert to list
 
             # Update base_link position and orientation
             self.update_base_link_position(self.linear_x, self.linear_y, self.angular_z)
-        # Update base_link position and orientation based on wheel movements
-        #self.update_base_link_position(self.linear_x, self.linear_y, self.angular_z)
 
         # Create and publish the transform
         self.publish_transform()
 
         self.get_logger().info(f'Publishing: Position: {self.joint_state_msg.position}, Velocity: {self.joint_state_msg.velocity}, Base Link Position: ({self.base_link_x}, {self.base_link_y}, {self.base_link_z}), Orientation: {self.orientation}')
-        self.get_logger().info(f'Publishing: XYZ: {self.linear_x},{ self.linear_y},{self.angular_z}')
+        self.get_logger().info(f'Publishing: XYZ: {self.linear_x}, {self.linear_y}, {self.angular_z}')
 
     def read_uart(self):
         while rclpy.ok():
             if self.serial_port.in_waiting > 0:
-                data = self.serial_port.readline().decode('utf-8').strip()
+                data = self.serial_port.readline().decode ('utf-8').strip()
                 self.get_logger().info(f"Received data: {data}")  # Log the received data
 
                 with self.lock:
@@ -143,7 +138,7 @@ class JointStatePublisher(Node):
 
     def update_base_link_position(self, linear_x, linear_y, angular_z):
         # Update base_link position based on the desired linear and angular velocities
-        dt = 0.01  # Time step
+        dt = 0.005  # Time step
         self.orientation += angular_z * dt  # Update orientation
         self.base_link_x += (linear_x * math.cos(self.orientation) - linear_y * math.sin(self.orientation)) * dt
         self.base_link_y += (linear_x * math.sin(self.orientation) + linear_y * math.cos(self.orientation)) * dt
@@ -151,14 +146,14 @@ class JointStatePublisher(Node):
         self.base_link_z = 0.0
       
     def publish_transform(self):
-        # Create a TransformStamped message
+        # Create a TransformStamped message for odom to base_link
         t = TransformStamped()
         t.header.stamp = self.get_clock().now().to_msg()
         t.header.frame_id = 'odom'  # Parent frame
         t.child_frame_id = 'base_link'  # Child frame
-        t.transform.translation.x = self.base_link_x
-        t.transform.translation.y = self.base_link_y
-        t.transform.translation.z = self.base_link_z
+        t.transform.translation.x = self.base_link_x 
+        t.transform.translation.y = self.base_link_y 
+        t.transform.translation.z = self.base_link_z 
         
         # Set rotation based on the current orientation
         quaternion = self.euler_to_quaternion(0.0, 0.0, self.orientation)
@@ -166,9 +161,25 @@ class JointStatePublisher(Node):
         t.transform.rotation.y = quaternion[1]
         t.transform.rotation.z = quaternion[2]
         t.transform.rotation.w = quaternion[3]
-
+        
         # Send the transform
         self.transform_broadcaster.sendTransform(t)
+
+        # Create a TransformStamped message for map to odom
+    #    t_map = TransformStamped()
+     #   t_map.header.stamp = self.get_clock().now().to_msg()
+      #  t_map.header.frame_id = 'map'  # Parent frame
+       # t_map.child_frame_id = 'odom'  # Child frame
+       # t_map.transform.translation.x = 0.0  # Set this based on your mapping logic
+       # t_map.transform.translation.y = 0.0  # Set this based on your mapping logic
+       # t_map.transform.translation.z = 0.0  # Assuming constant height for simplicity
+       # t_map.transform.rotation.x = 0.0
+       # t_map.transform.rotation.y = 0.0
+       # t_map.transform.rotation.z = 0.0
+       # t_map.transform.rotation.w = 1.0  # No rotation for the map frame
+
+        # Send the map to odom transform
+      #  self.transform_broadcaster.sendTransform(t_map)
 
     def euler_to_quaternion(self, roll, pitch, yaw):
         # Convert Euler angles to quaternion

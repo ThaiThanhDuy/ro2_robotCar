@@ -2,7 +2,7 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" >
 
     <joint name="lidar_joint" type="fixed">
-        <parent link="chassis"/>
+        <parent link="base_link"/>
         <child link="lidar_link"/>
         <origin xyz="0.45 0.0 0.16" rpy="0 0 0"/>
     </joint>

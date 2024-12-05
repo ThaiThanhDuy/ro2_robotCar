@@ -17,16 +17,15 @@ class TFPublisher(Node):
         # Get the current time
         current_time = self.get_clock().now().to_msg()
          # Publish transform from map to odom
-        self.publish_transform(current_time, 'map', 'odom', 0.0, 0.0, 0.0)
+      #  self.publish_transform(current_time, 'map', 'odom', 0.0, 0.0, 0.0)
 
         # Publish transform from odom to base_footprint
-        self.publish_transform(current_time, 'odom', 'base_link', 0.0, 0.0, 0.0)
+      #  self.publish_transform(current_time, 'odom', 'base_link', 0.0, 0.0, 0.0)
 
         # Publish transform from base_footprint to base_link
-        self.publish_transform(current_time, 'base_link', 'base_footprint', 0.0, 0.0, 0.0)
+    #    self.publish_transform(current_time, 'base_link', 'base_footprint', 0.0, 0.0, 0.0)
 
-     
-
+   
     def publish_transform(self, current_time, parent_frame, child_frame, x, y, z):
         transform_msg = TransformStamped()
         transform_msg.header.stamp = current_time
