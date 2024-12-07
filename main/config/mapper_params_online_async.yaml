@@ -8,14 +8,13 @@ slam_toolbox:
     ceres_trust_strategy: LEVENBERG_MARQUARDT
     ceres_dogleg_type: TRADITIONAL_DOGLEG
     ceres_loss_function: None
-
+    
     # ROS Parameters #
     #use_imu_data: true
     #imu_topic: "/imu/data"                      # -> IMU [MPU6050]
-
-    odom_frame: odom                             # -> used to track the robot's position over time.
     map_frame: map                               # -> used as a reference for the generated map.
-    base_frame: base_link                        # -> represents the robot's physical reference point.
+    odom_frame: odom                             # -> used to track the robot's position over time.
+    base_frame: base_footprint                       # -> represents the robot's physical reference point.
     scan_topic: /scan
     use_map_saver: true
     mode: mapping                                # 'mapping' for creating a new map or 'localization' for using an existing map.
@@ -29,10 +28,11 @@ slam_toolbox:
     # General Parameters #
 
     # Mapping
+    map_start_pose: [0.0, 0.0, 0.0]
     debug_logging: false
     throttle_scans: 1
-    transform_publish_period: 0.02               # If 0 never publishes odometry
-    map_update_interval: 5.0
+    transform_publish_period: 0.0               # If 0 never publishes odometry
+    map_update_interval: 1.0
     resolution: 0.05
     max_laser_range: 20.0                        # Maximum range for laser scans (in meters).
     minimum_time_interval: 0.5

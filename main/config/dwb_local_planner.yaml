@@ -1,0 +1,17 @@
+dwb_controller:
+# Local Planner Configuration: Choose a local planner (like DWB or TEB) that can dynamically adjust the robot's path based on the current costmap.
+  plugin: "dwb_local_planner/DWBLocalPlanner" # DWB (Dynamic Window Approach) and TEB (Timed Elastic Band)
+  # DWB specific parameters
+  vx_samples: 20
+  vy_samples: 0
+  vtheta_samples: 20
+  min_vel_x: 0.0
+  max_vel_x: 0.5
+  min_vel_y: -0.0
+  max_vel_y: 0.0
+  min_vel_theta: -1.0
+  max_vel_theta: 1.0
+  # Add other parameters as needed
+  # Cost parameters
+  cost_scaling_factor: 10.0
+  # Add other parameters as needed

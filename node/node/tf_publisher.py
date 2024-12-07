@@ -11,13 +11,13 @@ class TFPublisher(Node):
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
         # Create a timer to publish transforms at a fixed rate
-        self.timer = self.create_timer(0.1, self.publish_transforms)  # 10 Hz
+        self.timer = self.create_timer(0.01, self.publish_transforms)  # 10 Hz
 
     def publish_transforms(self):
         # Get the current time
         current_time = self.get_clock().now().to_msg()
          # Publish transform from map to odom
-      #  self.publish_transform(current_time, 'map', 'odom', 0.0, 0.0, 0.0)
+        self.publish_transform(current_time, 'map', 'odom', 0.0, 0.0, 0.0)
 
         # Publish transform from odom to base_footprint
       #  self.publish_transform(current_time, 'odom', 'base_link', 0.0, 0.0, 0.0)

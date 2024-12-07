@@ -1,0 +1,16 @@
+controller_server:
+# Recovery Behaviors: Implement recovery behaviors to handle unexpected obstacles, such as backing up or rotating
+  ros__parameters:
+    recovery_behaviors:
+      - name: "back_up"
+        type: "nav2_recoveries/BackUp"
+      - name: "rotate"
+        type: "nav2_recoveries/Rotate"
+      - name: "wait"
+        type: "nav2_recoveries/Wait"
+
+    controller_frequency: 10.0
+    # Local Planner Configuration: Choose a local planner (like DWB or TEB) that can dynamically adjust the robot's path based on the current costmap.
+    # Choose either DWB or TEB
+    controller_plugin: "dwb_local_planner/DWBLocalPlanner"  # For DWB
+    # controller_plugin: "teb_local_planner/TEBLocalPlanner"  # For TEB

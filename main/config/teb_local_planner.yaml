@@ -1,0 +1,22 @@
+teb_local_planner:
+  # TEB is more suitable for scenarios where the robot needs to navigate through tight spaces or around dynamic obstacles, as it optimizes the trajectory over time.
+  plugin: "teb_local_planner/TEBLocalPlanner"
+  # TEB specific parameters
+  max_vel_x: 0.5
+  max_vel_y: 0.0
+  max_vel_theta: 1.0
+  acc_lim_x: 0.5
+  acc_lim_y: 0.0
+  acc_lim_theta: 1.0
+  min_turning_radius: 0.0
+  # Optimization parameters
+  dt_ref: 0.3
+  dt_hysteresis: 0.1
+  global_plan_overwrite_orientation: true
+  # Cost parameters
+  weight_obstacle: 50.0
+  weight_dynamic_obstacle: 50.0
+  weight_viapoint: 1.0
+  weight_prefer_forward: 1.0
+  weight_turning: 1.0
+  # Add more parameters as needed
