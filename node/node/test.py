@@ -195,9 +195,19 @@ class JointStatePublisher(Node):
     def update_base_link_position(self, linear_x, linear_y, angular_z):
         # Update base_link position based on the desired linear and angular velocities
         dt = 0.001  # Time step
-        self.orientation += angular_z * dt  # Update orientation
-        self.base_link_x += (linear_x * math.cos(self.orientation) - linear_y * math.sin(self.orientation)) * dt
-        self.base_link_y += (linear_x * math.sin(self.orientation) + linear_y * math.cos(self.orientation)) * dt
+
+        # Convert current quaternion to yaw
+        current_yaw = self.quaternion_to_yaw(self.orientation)
+
+        # Update yaw based on angular velocity
+        current_yaw += angular_z * dt
+
+        # Convert back to quaternion
+        self.orientation = self.yaw_to_quaternion(current_yaw)
+
+        # Update position based on the updated orientation
+        self.base_link_x += (linear_x * math.cos(current_yaw) - linear_y * math.sin(current_yaw)) * dt
+        self.base_link_y += (linear_x * math.sin(current_yaw) + linear_y * math.cos(current_yaw)) * dt
         # Assuming constant height for simplicity
         self.base_link_z = 0.0
 
@@ -234,6 +244,20 @@ class JointStatePublisher(Node):
         qz = cr * cp * sy - sr * sp * cy
 
         return qx, qy, qz, qw
+
+    def quaternion_to_yaw(self, orientation):
+        # Convert quaternion to yaw angle
+        qx, qy, qz, qw = orientation
+        # Yaw (Z-axis rotation)
+        siny_cosp = 2.0 * (qw * qz + qx * qy)
+        cosy_cosp = 1.0 - 2.0 * (qy * qy + qz * qz)
+        return math.atan2(siny_cosp, cosy_cosp)
+
+    def yaw_to_quaternion(self, yaw):
+        # Convert yaw angle to quaternion
+        cy = math.cos(yaw * 0.5)
+        sy = math.sin(yaw * 0.5)
+        return [0.0, 0.0, sy, cy]  # Assuming roll and pitch are zero
 
 def main(args=None):
     rclpy.init(args=args)
