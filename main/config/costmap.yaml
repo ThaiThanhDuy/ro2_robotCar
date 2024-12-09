@@ -1,9 +1,6 @@
 global_costmap:
- # Utilize costmaps that are updated in real-time based on LIDAR data to represent the environment and detect obstacles.
- # Obstacle Layer: Marks occupied spaces based on LIDAR readings.
- # Inflation Layer: Expands the occupied areas to create a buffer zone around obstacles, preventing the robot from getting too close.
   global_frame: map
-  robot_base_frame: base_footprint
+  robot_base_frame: base_link
   update_frequency: 5.0
   publish_frequency: 5.0
   static_map: true
@@ -11,15 +8,25 @@ global_costmap:
     - {name: static_layer, type: "nav2_costmap_2d::StaticLayer"}
     - {name: obstacle_layer, type: "nav2_costmap_2d::ObstacleLayer"}
     - {name: inflation_layer, type: "nav2_costmap_2d::InflationLayer"}
+    - {name: ultrasonic_layer, type: "nav2_costmap_2d::TopicLayer"}
 
 obstacle_layer:
-  observation_sources: laser_scan
+  observation_sources: laser_scan ultrasonic_distance  # List both sources here
   laser_scan:
     data_type: "sensor_msgs/msg/LaserScan"
     topic: "/scan"  # Change this to your LIDAR topic
     marking: true
     clearing: true
     expected_update_rate: 0.5
+  ultrasonic_distance: 
+    data_type: "sensor_msgs/msg/Range"
+    topic: "/ultrasonic_distance"
+    marking: true
+    clearing: true
+    expected_update_rate: 0.5
+    min_obstacle_height: 0.0
+    max_obstacle_height: 2.0
+    inflation_radius: 0.5  # Adjust based on your robot's size
 
 inflation_layer:
   inflation_radius: 0.5
