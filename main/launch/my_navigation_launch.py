@@ -46,7 +46,7 @@ def generate_launch_description():
              #   'path/to/nav2_params.yaml'
             #],
             #remappings=[
-             #   ('/scan', '/your_lidar_topic')  # Change this to your LIDAR topic
+             #   ('/scan', '/your_lidar_topic','/ultrasonic_distance', '/ultrasonic_distance')  # Change this to your LIDAR topic
             #]
         #),
         Node(
