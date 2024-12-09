@@ -36,19 +36,22 @@ class STM32Interface(Node):
         self.root = tk.Tk()
         self.root.title("Mecanum Drive Control")
 
-        # Input fields for linear x, y and angular z
+         # Input fields for linear x, y and angular z
         tk.Label(self.root, text="Linear X:").grid(row=1, column=0)
         self.linear_x_entry = tk.Entry(self.root)
+        self.linear_x_entry.insert(0, "0.0")  # Set default value to 0.0
         self.linear_x_entry.grid(row=1, column=1)
         self.linear_x_entry.bind("<Return>", self.update_command)  # Bind Enter key
 
         tk.Label(self.root, text="Linear Y:").grid(row=2, column=0)
         self.linear_y_entry = tk.Entry(self.root)
+        self.linear_y_entry.insert(0, "0.0")  # Set default value to 0.0
         self.linear_y_entry.grid(row=2, column=1)
         self.linear_y_entry.bind("<Return>", self.update_command)  # Bind Enter key
 
         tk.Label(self.root, text="Angular Z:").grid(row=3, column=0)
         self.angular_z_entry = tk.Entry(self.root)
+        self.angular_z_entry.insert(0, "0.0")  # Set default value to 0.0
         self.angular_z_entry.grid(row=3, column=1)
         self.angular_z_entry.bind("<Return>", self.update_command)  # Bind Enter key
 
