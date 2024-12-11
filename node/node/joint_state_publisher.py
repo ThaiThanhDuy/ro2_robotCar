@@ -39,7 +39,7 @@ class JointStatePublisher(Node):
         self.wheel_radius = 0.0485  # Radius of the wheels (in meters)
 
         # Initialize UART
-        self.serial_port = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)  # Adjust the port and baud rate as needed
+        self.serial_port = serial.Serial('/dev/ttyUSB1', 115200, timeout=1)  # Adjust the port and baud rate as needed
         
         # Buffer for incoming data
         self.data_buffer = deque(maxlen=10)  # Adjust the size as needed
