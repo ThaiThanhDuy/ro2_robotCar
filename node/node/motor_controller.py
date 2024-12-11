@@ -7,7 +7,7 @@ from tkinter import messagebox  # Assuming you're using Tkinter for GUI
 class MotorController(Node):
     def __init__(self):
         super().__init__('motor_controller')
-        self.serial_port = serial.Serial('/dev/ttyUSB0', 9600)  # Adjust port and baud rate
+        self.serial_port = serial.Serial('/dev/ttyUSB1', 9600)  # Adjust port and baud rate
         self.command_in_progress = False  # Initialize command in progress flag
         self.subscription = self.create_subscription(
             Twist,
