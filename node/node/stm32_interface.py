@@ -21,7 +21,7 @@ class STM32Interface(Node):
         self.start_gui_thread()
 
         # Automatically open the serial port
-        self.open_port('/dev/ttyUSB0')
+        self.open_port('/dev/ttyUSB1')
 
         # Schedule the command sending
         self.send_command_periodically()
