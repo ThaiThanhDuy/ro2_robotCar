@@ -35,20 +35,7 @@ def generate_launch_description():
             parameters=['/home/duy/robot/src/main/config/amcl.yaml',],
             remappings=[('/tf', '/tf'), ('/tf_static', '/tf_static','/scan', '/lidar_link')]
         ),
-       #  Node(
-        #    package='nav2_bringup',
-        #    executable='nav2_bringup',
-         #   name='nav2_bringup',
-         #   output='screen',
-          #  parameters=[
-           #     'path/to/costmap.yaml',
-            #    'path/to/local_planner.yaml',
-             #   'path/to/nav2_params.yaml'
-            #],
-            #remappings=[
-             #   ('/scan', '/your_lidar_topic')  # Change this to your LIDAR topic
-            #]
-        #),
+   
         Node(
     package='nav2_controller',
     executable='controller_server',

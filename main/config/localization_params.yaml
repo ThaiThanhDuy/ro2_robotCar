@@ -1,0 +1,41 @@
+# localization_params.yaml
+
+# General parameters
+use_sim_time: false  # Set to true if using simulation
+
+# Map Server Parameters
+map_server:
+  ros__parameters:
+    yaml_filename: "path/to/your/map.yaml"  # Path to your map file
+    # Additional parameters can be added here
+
+# AMCL Parameters
+amcl:
+  ros__parameters:
+    use_sim_time: false  # Set to true if using simulation
+    min_particles: 500  # Minimum number of particles
+    max_particles: 2000  # Maximum number of particles
+    kld_err: 0.05        # KLD error
+    kld_z: 0.99          # KLD z value
+    update_min_d: 0.2    # Minimum distance to update
+    update_min_a: 0.5    # Minimum angle to update
+    transform_tolerance: 0.0  # Tolerance for transforms
+    laser_likelihood_max_dist: 2.0
+    initial_pose_x: 0.0  # Initial pose x
+    initial_pose_y: 0.0  # Initial pose y
+    initial_pose_a: 0.0  # Initial pose angle
+    # Additional parameters can be added here
+    use_map_topic: true
+    map_topic: /map
+    base_frame_id: base_footprint
+    global_frame_id: map
+    odom_frame_id: odom
+  
+   
+    
+
+# Lifecycle Manager Parameters
+lifecycle_manager_localization:
+  ros__parameters:
+    autostart: true  # Automatically start managed nodes
+    node_names: ["map_server", "amcl"]  # List of node names to manage

@@ -1,0 +1,47 @@
+# navigation_params.yaml
+
+# General parameters
+use_sim_time: false
+
+# Controller Server Parameters
+controller_server:
+  ros__parameters:
+    controller_frequency: 20.0
+    controller_plugin: "nav2_controller/FollowPath"
+    # Add other controller parameters as needed
+
+# Planner Server Parameters
+planner_server:
+  ros__parameters:
+    planner_plugin: "nav2_planner/GlobalPlanner"
+    # Add other planner parameters as needed
+    use_sim_time: false
+
+# Recoveries Server Parameters
+recoveries_server:
+  ros__parameters:
+    recovery_plugins: ["nav2_recoveries/BackUp", "nav2_recoveries/Spin"]
+    
+    # Add other recovery parameters as needed
+
+# Behavior Tree Navigator Parameters
+bt_navigator:
+  ros__parameters:
+    default_bt_xml_filename: "src/main/config/bt_file.xml"
+    # Add other behavior tree parameters as needed
+
+# Waypoint Follower Parameters
+waypoint_follower:
+  ros__parameters:
+    # Add parameters specific to the waypoint follower
+    use_sim_time: false
+    goal_tolerance: 0.2
+    max_trans_vel: 0.5
+    max_rot_vel: 1.0
+    # Add other waypoint follower parameters as needed
+
+# Lifecycle Manager Parameters
+lifecycle_manager_navigation:
+  ros__parameters:
+    autostart: true
+    # Add other lifecycle manager parameters as needed
