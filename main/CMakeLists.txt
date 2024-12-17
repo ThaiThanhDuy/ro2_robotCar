@@ -32,7 +32,7 @@ if(BUILD_TESTING)
 endif()
 
 
-install(DIRECTORY launch rviz config scripts
+install(DIRECTORY launch rviz config scripts maps
   DESTINATION share/${PROJECT_NAME}/
 )
 

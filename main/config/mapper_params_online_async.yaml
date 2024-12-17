@@ -21,8 +21,8 @@ slam_toolbox:
 
     
     # Initial Pose Parameters #
-    #map_file_name: map
-    #map_start_pose: [0.0, 0.0, 0.0]
+  
+    #map_file_name: /home/dev/dev_ws/my_map_serial
     #map_start_at_dock: true
 
     # General Parameters #
