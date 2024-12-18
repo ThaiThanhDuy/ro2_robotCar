@@ -34,8 +34,8 @@ class MotorController(Node):
 
         self.command_in_progress = True
         try:
-            wheel_radius = 0.35  # Adjust to your robot's wheel radius
-            wheel_base = 0.45     # Distance between front and rear wheels
+            wheel_radius = 0.0485  # Adjust to your robot's wheel radius
+            wheel_base = 0.38     # Distance between front and rear wheels
 
             # Calculate individual wheel velocities
             front_left_velocity = (linear_x - linear_y - (wheel_base * angular_z / 2))
