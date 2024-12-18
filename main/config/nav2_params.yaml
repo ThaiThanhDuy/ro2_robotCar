@@ -64,6 +64,10 @@ controller_server:
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: True
+
+      #Footprint
+      #footprint: [[-0.2, -0.1], [-0.2, 0.1], [0.2, 0.1], [0.2, -0.1]] # Bottom-left ,  Top-left corner ,Top-right corner, Bottom-right corner
+      # Velocity parameters
       min_vel_x: -0.1
       min_vel_y: -0.1
       max_vel_x: 0.1
@@ -72,18 +76,22 @@ controller_server:
       min_speed_xy: 0.0
       max_speed_xy: 0.26
       min_speed_theta: 0.0
-      # Add high threshold velocity for turtlebot 3 issue.
-      # https://github.com/ROBOTIS-GIT/turtlebot3_simulations/issues/75
+     
+      # Acceleration parameters
       acc_lim_x: 2.5
       acc_lim_y: 0.0
       acc_lim_theta: 3.2
       decel_lim_x: -2.5
       decel_lim_y: 0.0
       decel_lim_theta: -3.2
+      # Trajectory parameters
       vx_samples: 20
       vy_samples: 5
       vtheta_samples: 20
-      sim_time: 1.7
+      sim_time: 1.0
+       # Cost parameters
+      #cost_scaling_factor: 10.0
+
       linear_granularity: 0.05
       angular_granularity: 0.025
       transform_tolerance: 0.2
@@ -102,6 +110,9 @@ controller_server:
       RotateToGoal.scale: 32.0
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
+       # Smoothing parameters
+      #smoothing: true
+      #smoothing_factor: 0.5
 
 controller_server_rclcpp_node:
   ros__parameters:
@@ -125,7 +136,7 @@ local_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
         inflation_radius: 0.55
-      voxel_layer:
+      voxel_layer: 
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
         publish_voxel_map: True
