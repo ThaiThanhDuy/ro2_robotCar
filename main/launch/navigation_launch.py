@@ -132,7 +132,7 @@ def generate_launch_description():
             output='screen',
             parameters=[configured_params],
             remappings=remappings),
-
+   
         Node(
             package='nav2_lifecycle_manager',
             executable='lifecycle_manager',
