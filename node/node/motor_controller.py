@@ -18,6 +18,7 @@ class MotorController(Node):
 
     def listener_callback(self, msg):
         # This method is called when a new Twist message is received
+        # ros2 topic pub /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.1, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.1}}"
         self.send_command(msg.linear.x, msg.linear.y, msg.angular.z)
 
     def send_command(self, linear_x, linear_y, angular_z):
@@ -65,7 +66,8 @@ class MotorController(Node):
             # Send the new command to the STM32
             command = f"c:{front_left_velocity},{front_right_velocity},{rear_left_velocity},{rear_right_velocity}\n"
             self.serial_port.write(command.encode())
-            self.get_logger().info(f"Command sent: {command.strip()}")
+          
+            self.get_logger().info(f"Sending command: {command.strip()}")
 
         except ValueError:
             self.get_logger().error("Invalid input. Please enter numeric values.")

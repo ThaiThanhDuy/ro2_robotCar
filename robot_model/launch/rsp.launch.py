@@ -36,10 +36,11 @@ def generate_launch_description():
     )
 
   
-    stm32_interface_node = Node(
+    cmd_vel = Node(
         package='node',
-        executable='stm32_interface',
-       output='screen',
+        #executable='stm32_interface',
+        executable='motor_controller',
+        output='screen',
         parameters=[params]
     )
     # Launch!
@@ -51,5 +52,5 @@ def generate_launch_description():
 
         node_robot_state_publisher,
         joint_state_publisher_node,
-        stm32_interface_node
+        cmd_vel,
     ])
