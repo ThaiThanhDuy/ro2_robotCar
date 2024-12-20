@@ -84,8 +84,10 @@ class JointStatePublisher(Node):
         # Create and publish the transform
         self.publish_transform()
 
-        self.get_logger().info(f'Publishing: Position: {self.joint_state_msg.position}, Velocity: {self.joint_state_msg.velocity}, Base Link Position: ({self.base_link_x}, {self.base_link_y}, {self.base_link_z}), Orientation: {self.orientation}, Quaternion: ({self.qx}, {self.qy}, {self.qz}, {self.qw})')
-        self.get_logger().info(f'Publishing: Linear Velocities: X: {self.linear_x}, Y: {self.linear_y}, Angular Z: {self.angular_z}')
+        self.get_logger().info(f'Position: {self.joint_state_msg.position}, Velocity: {self.joint_state_msg.velocity}')
+        self.get_logger().info(f'Orientation: {self.orientation}, Quaternion: ({self.qx}, {self.qy}, {self.qz}, {self.qw})')
+        self.get_logger().info(f'Linear Velocities: X: {self.linear_x}, Y: {self.linear_y}, Angular Z: {self.angular_z}')
+
 
     def read_uart(self):
         while rclpy.ok():
@@ -164,7 +166,7 @@ class JointStatePublisher(Node):
     def update_base_link_position(self, linear_x, linear_y, angular_z):
         # Update base_link position based on the desired linear and angular velocities
         dt = 0.001  # Time step
-        self.orientation += angular_z * dt  # Update orientation
+        # The orientation is now set directly from the yaw value in process_uart_data
         self.base_link_x += (linear_x * math.cos(self.orientation) - linear_y * math.sin(self.orientation)) * dt
         self.base_link_y += (linear_x * math.sin(self.orientation) + linear_y * math.cos(self.orientation)) * dt
         # Assuming constant height for simplicity

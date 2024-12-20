@@ -29,6 +29,7 @@ setup(
             'stm32_interface = node.stm32_interface:main',  
             'joint_state_publisher = node.joint_state_publisher:main', 
             'motor_controller = node.motor_controller:main', 
+            'nav2_gui=node.nav2_gui:main'
         ],
     },
     
