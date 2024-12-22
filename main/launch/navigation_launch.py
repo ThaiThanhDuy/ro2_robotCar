@@ -141,5 +141,6 @@ def generate_launch_description():
             parameters=[{'use_sim_time': use_sim_time},
                         {'autostart': autostart},
                         {'node_names': lifecycle_nodes}]),
+        #ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{goal: {pose: {position: {x: 1.0, y: 2.0, z: 0.0}, orientation: {w: 1.0}}}}}"
 
     ])
