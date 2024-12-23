@@ -26,7 +26,7 @@ class TransformListenerNode(Node):
     def timer_callback(self):
         try:
             # Get the transformation from 'odom' to 'base_link'
-            trans = self.tf_buffer.lookup_transform('odom', ' base_link', rclpy.time.Time())
+            trans = self.tf_buffer.lookup_transform('base_link', ' odom', rclpy.time.Time())
             self.process_transform(trans)
         except Exception as e:
             self.get_logger().info(f'Could not get transform: {e}')
