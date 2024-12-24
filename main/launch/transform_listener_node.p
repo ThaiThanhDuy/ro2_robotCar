@@ -14,7 +14,7 @@ class TransformListenerNode(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         # Initialize serial port (replace with your actual port)
-        self.serial_port = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)  # Adjust as necessary
+        self.serial_port = serial.Serial('/dev/ttyUSB1', 115200, timeout=1)  # Adjust as necessary
         self.command_in_progress = False
 
         # Timer to periodically get the transformation
@@ -39,11 +39,11 @@ class TransformListenerNode(Node):
 
     def process_transform(self, trans: TransformStamped):
         # Extract translation
-        x = trans.transform.translation.x
-        y = trans.transform.translation.y
+        x = -trans.transform.translation.x
+        y = -trans.transform.translation.y
         
         # Convert quaternion to yaw
-        yaw = self.quaternion_to_yaw(trans.transform.rotation)
+        yaw = -self.quaternion_to_yaw(trans.transform.rotation)
 
         # Log the current position
         self.get_logger().info(f'Current Position: x={x}, y={y}, Yaw={yaw}')
@@ -52,10 +52,12 @@ class TransformListenerNode(Node):
         self.control_robot(x, y, yaw)
 
     def control_robot(self, current_x, current_y, current_yaw):
-        goal_x, goal_y, goal_yaw = self.goal
+        goal_x =0.0
+        goal_y = 0.0
+        goal_yaw = 0.0
 
         # Define thresholds
-        threshold = 0.1  # Threshold for x and y
+        threshold = 0.05  # Threshold for x and y
         yaw_threshold = 0.1  # Threshold for yaw
 
         if self.state == 'ALIGN_YAW':
@@ -72,11 +74,18 @@ class TransformListenerNode(Node):
             # Control logic for yaw adjustment
             if abs(yaw_difference) > yaw_threshold:  # Threshold to avoid oscillation
                 if yaw_difference > 0:
-                    # Spin left
-                    angular_z = 0.5  # Left spin speed
+                    if yaw_difference < 0.2:
+                        angular_z = 0.2  # Left spin speed
+                    else :
+                        angular_z = 0.5  # Left spin speed
+                    # Spin left     
+
                 else:
                     # Spin right
-                    angular_z = -0.5  # Right spin speed
+                    if yaw_difference > -0.2:
+                        angular_z = -0.2  # Left spin speed
+                    else :
+                        angular_z = -0.5  # Left spin speed
                 linear_x = 0.0
                 linear_y = 0.0
             else:
@@ -95,8 +104,17 @@ class TransformListenerNode(Node):
                 self.state = 'MOVE_Y'  # Transition to moving in y direction
             else:
                 # Move towards the goal in x direction
-                linear_x = 0.5 if distance_to_goal_x > 0 else -0.5
-                linear _y = 0.0
+                if distance_to_goal_x > 0:
+                    if distance_to_goal_x < 0.1:
+                        linear_x = 0.05 
+                    else:
+                        linear_x = 0.1 
+                else:
+                    if distance_to_goal_x > -0.1:
+                        linear_x = -0.05 
+                    else:
+                        linear_x = -0.1 
+                linear_y = 0.0
                 angular_z = 0.0
 
         elif self.state == 'MOVE_Y':
@@ -112,18 +130,74 @@ class TransformListenerNode(Node):
                 return
             else:
                 # Move towards the goal in y direction
-                linear_y = 0.5 if distance_to_goal_y > 0 else -0.5
-                linear_x = 0.0
-                angular_z = 0.0
+                 if distance_to_goal_y > 0:
+                    if distance_to_goal_y < 0.1:
+                        linear_y = 0.05 
+                    else:
+                        linear_y = 0.1 
+                 else:
+                    if distance_to_goal_y > -0.1:
+                        linear_y = -0.05 
+                    else:
+                        linear_y = -0.1 
+                 linear_x = 0.0
+                 angular_z = 0.0
 
         # Send command to the robot
         self.send_command(linear_x, linear_y, angular_z)
 
     def send_command(self, linear_x, linear_y, angular_z):
-        """Send command to the robot via serial."""
-        command = f"{linear_x},{linear_y},{angular_z}\n"
-        self.serial_port.write(command.encode())
-        self.get_logger().info(f"Command sent: {command.strip()}")
+        if self.command_in_progress:
+            self.get_logger().warn("Previous command still in progress. Please wait.")
+            return
+
+        # Check if the serial port is open
+        if self.serial_port is None or not self.serial_port.is_open:
+            self.get_logger().warn("Cannot send command: Port is not open.")
+            return
+
+        self.command_in_progress = True
+        try:
+            wheel_radius = 0.0485  # Adjust to your robot's wheel radius
+            wheel_base = 0.38     # Distance between front and rear wheels
+
+            # Calculate individual wheel velocities
+            front_left_velocity = (linear_x - linear_y - (wheel_base * angular_z / 2))
+            front_right_velocity = (linear_x + linear_y + (wheel_base * angular_z / 2))
+            rear_left_velocity = (linear_x + linear_y - (wheel_base * angular_z / 2))
+            rear_right_velocity = (linear_x - linear_y + (wheel_base * angular_z / 2))
+
+            # Check if velocities are within the range -0.27 to 0.27
+            if (abs(front_left_velocity) > 0.27 or
+                abs(front_right_velocity) > 0.27 or
+                abs(rear_left_velocity) > 0.27 or
+                abs(rear_right_velocity) > 0.27):
+                self.get_logger().warn("One or more velocities are out of range. Command not sent.")
+                return  # Skip sending the command if any velocity is out of range
+
+            # Scale velocities if necessary
+            front_left_velocity *= 2.0
+            front_right_velocity *= 2.0
+            rear_left_velocity *= 2.0
+            rear_right_velocity *= 2.0
+
+            # Round velocities to two decimal places
+            front_left_velocity = round(front_left_velocity, 2)
+            front_right_velocity = round(front_right_velocity, 2)
+            rear_left_velocity = round(rear_left_velocity, 2)
+            rear_right_velocity = round(rear_right_velocity, 2)
+
+            # Send the new command to the STM32
+            command = f"c:{front_left_velocity},{front_right_velocity},{rear_left_velocity},{rear_right_velocity}\n"
+            self.serial_port.write(command.encode())
+          
+            self.get_logger().info(f"Sending command: {command.strip()}")
+
+        except ValueError:
+            self.get_logger().error("Invalid input. Please enter numeric values.")
+        finally:
+            self.command_in_progress = False  # Reset the state variable
+
 
     def quaternion_to_yaw(self, quaternion):
         """Convert quaternion to yaw angle."""
@@ -139,7 +213,7 @@ class TransformListenerNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = TransformListenerNode()
-    node.set_goal(1.0, 1.0, 0.0)  # Example goal
+    node.set_goal(0.0, 0.0, 0.0)  # Example goal
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
