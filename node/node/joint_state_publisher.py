@@ -155,10 +155,19 @@ class JointStatePublisher(Node):
             self.get_logger().error(f"Error parsing data: {e}")
 
     def update_base_link_position(self, linear_x, linear_y, angular_z):
-        dt = 0.05  # Time step based on the timer interval
-        self.base_link_x += (linear_x * math.cos(self.orientation) - linear_y * math.sin(self.orientation)) * dt
-        self.base_link_y += (linear_x * math.sin(self.orientation) + linear_y * math.cos(self.orientation)) * dt
-        self.base_link_z = 0.0  # Assuming constant height
+       dt = 0.05  # Time step based on the timer interval
+
+        if(linear_x ==0 and linear_y==0):
+            self.base_link_x = lastX
+            self.base_link_y = lastY
+            self.base_link_z = lastZ
+        else :
+            self.base_link_x += (linear_x * math.cos(self.orientation) - linear_y * math.sin(self.orientation)) * dt
+            self.base_link_y += (linear_x * math.sin(self.orientation) + linear_y * math.cos(self.orientation)) * dt
+            self.base_link_z = 0.0  # Assuming constant height
+            lastX = self.base_link_x
+            lastY = self.base_link_y
+            lastZ = self.base_link_z
 
     def publish_transform(self):
         t = TransformStamped()
