@@ -120,14 +120,19 @@ class JointStatePublisher(Node):
 
                 self.prev_position = self.joint_state_msg.position
                 self.prev_velocity = self.joint_state_msg.velocity
-
-                # Calculate linear and angular velocities
-                self.linear_x = (self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
+                if(self.joint_state_msg.velocity[0]==0 and self.joint_state_msg.velocity[0] ==0  and self.joint_state_msg.velocity[0] ==0 and self.joint_state_msg.velocity[0]==0):
+                    self.linear_x =0.0
+                    self.linear_y=0.0
+                else :
+                      # Calculate linear and angular velocities
+                    self.linear_x = (self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
                                  self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
-                self.linear_y = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
+                    self.linear_y = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
                                  self.joint_state_msg.velocity[2] - self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
-                self.angular_z = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] -
+                    self.angular_z = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] -
                                   self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * self.wheel_base)
+
+              
 
                 # Calculate the change in yaw
                 yaw_change = yaw_radians - self.orientation
