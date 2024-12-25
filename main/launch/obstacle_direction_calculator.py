@@ -2,20 +2,38 @@ import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid
 import numpy as np
+from tf2_ros import Buffer, TransformListener
+import tf2_ros
 
 class ObstacleDirectionCalculator(Node):
     def __init__(self):
         super().__init__('obstacle_direction_calculator')
+        
+        # Initialize TF2 buffer and listener
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+
+        # Subscribe to the global costmap
         self.costmap_subscriber = self.create_subscription(
             OccupancyGrid,
-            'global_costmap',  # Replace with your global costmap topic
+            '/global_costmap/costmap',  # Correct topic for the global costmap
             self.costmap_callback,
             10
         )
-        self.robot_position = np.array([0.0, 0.0])  # Robot's position in base_link frame
+
+        # Initialize robot position
+        self.robot_position = np.array([0.0, 0.0])  # Default position
         self.robot_orientation = 0.0  # Robot's orientation in radians (0 is facing positive Y)
 
     def costmap_callback(self, msg):
+        # Get the robot's position from the transform
+        try:
+            transform = self.tf_buffer.lookup_transform('map', 'base_link', rclpy.time.Time())
+            self.robot_position = np.array([transform.transform.translation.x, transform.transform.translation.y])
+        except Exception as e:
+            self.get_logger().error(f'Error getting robot position: {e}')
+            return
+
         width = msg.info.width
         height = msg.info.height
         resolution = msg.info.resolution
