@@ -94,7 +94,8 @@ class TransformListenerNode(Node):
         elif self.state == 'MOVE_X':
             time.sleep(1.5)
             # Calculate the distance to the goal in x
-            distance_to_goal_x = goal_x - current_x
+            distance_to_goal_x ```python
+            = goal_x - current_x
 
             # Check if within threshold for x
             if abs(distance_to_goal_x) < threshold:
@@ -179,6 +180,7 @@ class TransformListenerNode(Node):
             rear_right_velocity *= 2.0
 
             # Round velocities to two decimal places
+            ```python
             front_left_velocity = round(front_left_velocity, 2)
             front_right_velocity = round(front_right_velocity, 2)
             rear_left_velocity = round(rear_left_velocity, 2)
