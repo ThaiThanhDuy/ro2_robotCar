@@ -100,7 +100,8 @@ class TransformListenerNode(Node):
             if abs(distance_to_goal_x) < threshold:
                 # Stop if within threshold for x
                 linear_x = 0.0
-                self.state = 'MOVE_Y'  # Transition to moving in y direction else:
+                self.state = 'MOVE_Y'  # Transition to moving in y direction
+            else:
                 # Move towards the goal in x direction
                 linear_x = 0.06 if distance_to_goal_x >= 0.1 else 0.05 if distance_to_goal_x > 0 else -0.06 if distance_to_goal_x <= -0.1 else -0.05
                 linear_y = 0.0
@@ -184,24 +185,14 @@ class TransformListenerNode(Node):
             rear_right_velocity = round(rear_right_velocity, 2)
 
             # Send the new command to the STM32
-          
             command = f"c:{front_left_velocity},{front_right_velocity},{rear_left_velocity},{rear_right_velocity}\n"
             self.command_serial_port.write(command.encode())
-          
             self.get_logger().info(f"Sending command: {command.strip()}")
 
         except ValueError:
             self.get_logger().error("Invalid input. Please enter numeric values.")
         finally:
             self.command_in_progress = False  # Reset the state variable
-
-    # def send_character(self, char):
-    #     """Send a character to the character serial port."""
-    #     if self.character_serial_port is None or not self.character_serial_port.is_open:
-    #         self.get_logger().warn("Cannot send character: Character port is not open.")
-    #         return
-    #     self.character_serial_port.write(char.encode())
-    #     self.get_logger().info(f"Sent character: {char}")
 
     def quaternion_to_yaw(self, quaternion):
         """Convert quaternion to yaw angle."""
