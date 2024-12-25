@@ -7,6 +7,7 @@ import serial
 import time
 import tkinter as tk
 from tkinter import messagebox
+import threading
 
 class TransformListenerNode(Node):
     def __init__(self):
@@ -35,8 +36,9 @@ class TransformListenerNode(Node):
         ]
         self.current_goal_index = 0
 
-        # Initialize GUI
-        self.init_gui()
+        # Initialize GUI in a separate thread
+        self.gui_thread = threading.Thread(target=self.init_gui)
+        self.gui_thread.start()
 
     def init_gui(self):
         self.root = tk.Tk()
@@ -64,6 +66,9 @@ class TransformListenerNode(Node):
         self.run_button.pack()
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+        # Start the Tkinter main loop
+        self.root.mainloop()
 
     def set_goal_from_input(self):
         try:
@@ -108,6 +113,7 @@ class TransformListenerNode(Node):
         threshold = 0.15  # Threshold for x and y
         yaw_threshold = 0.2  # Threshold for yaw
 
+        
         if self.state == 'ALIGN_YAW':
             # Calculate the desired yaw angle based on the goal yaw
             desired_yaw = goal_yaw
