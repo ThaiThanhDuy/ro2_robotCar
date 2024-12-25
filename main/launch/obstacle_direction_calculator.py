@@ -39,6 +39,10 @@ class ObstacleDistanceCalculator(Node):
             'back': 0,   # 180 degrees
             'left': (3 * num_ranges) // 4,   # 90 degrees
             'right': num_ranges // 4  # 270 degrees
+            'Northeast': num_ranges // 8,                # 45 degrees
+            'Southwest': 5 * num_ranges // 8,             # 225 degrees
+            'Northwest': 3 * num_ranges // 8,             # 135 degrees
+            'Southeast': 7 * num_ranges // 8             # 315 degrees
         }
 
         # Calculate distances for each direction
