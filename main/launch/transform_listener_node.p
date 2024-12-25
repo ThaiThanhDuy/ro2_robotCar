@@ -6,7 +6,7 @@ import math
 import serial
 import time
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 import threading
 
 class TransformListenerNode(Node):
@@ -27,13 +27,14 @@ class TransformListenerNode(Node):
         # Goal parameters (x, y, yaw)
         self.goal = (0.0, 0.0, 0.0)
         self.state = 'ALIGN_YAW'
+        self.is_running = False  # Flag to control robot movement
 
         # Define the sequence of goals
-        self.goals = [
-            (0.0, 0.0, 0.0),  # Point A
-            (1.0, 1.0, 0.0),  # Point B
-            (2.0, 0.0, 0.0)   # Point C
-        ]
+        self.goals = {
+            "Point A": (0.0, 0.0, 0.0),
+            "Point B": (1.0, 1.0, 0.0),
+            "Point C": (2.0, 0.0, 0.0)
+        }
         self.current_goal_index = 0
 
         # Initialize GUI in a separate thread
@@ -43,6 +44,12 @@ class TransformListenerNode(Node):
     def init_gui(self):
         self.root = tk.Tk()
         self.root.title("Robot Goal Setter")
+
+        # Create a dropdown menu for selecting goals
+        tk.Label(self.root, text="Select Goal:").pack()
+        self.goal_selection = ttk.Combobox(self.root, values=list(self.goals.keys()))
+        self.goal_selection.pack()
+        self.goal_selection.current(0)  # Set default selection to Point A
 
         # Create input fields for goals
         tk.Label(self.root, text="Goal X:").pack()
@@ -71,17 +78,17 @@ class TransformListenerNode(Node):
         self.root.mainloop()
 
     def set_goal_from_input(self):
-        try:
-            x = float(self.goal_x_entry.get())
-            y = float(self.goal_y_entry.get())
-            yaw = float(self.goal_yaw_entry.get())
+        selected_goal = self.goal_selection.get()
+        if selected_goal in self.goals:
+            x, y, yaw = self.goals[selected_goal]
             self.set_goal(x, y, yaw)
-        except ValueError:
-            messagebox.showerror("Input Error", "Please enter valid numbers for x, y, and yaw.")
+        else:
+            messagebox.showerror("Input Error", "Please select a valid goal.")
 
     def run_robot(self):
+        self.is_running = True  # Set the flag to indicate the robot should run
         if self.current_goal_index < len(self.goals):
-            next_goal = self.goals[self.current_goal_index]
+            next_goal = list(self.goals.values())[self.current_goal_index]
             self.set_goal(*next_goal)
             self.get_logger().info(f"Running to goal: {next_goal}")
         else:
@@ -92,11 +99,12 @@ class TransformListenerNode(Node):
         self.get_logger().info(f"Goal set to: x={x}, y={y}, yaw={yaw}")
 
     def timer_callback(self):
-        try:
-            trans = self.tf_buffer.lookup_transform('base_link', 'odom', rclpy.time.Time())
-            self.process_transform(trans)
-        except Exception as e:
-            self.get_logger().info(f'Could not get transform: {e}')
+        if self.is_running:  # Only process transforms if the robot is running
+            try:
+                trans = self.tf_buffer.lookup_transform('base_link', 'odom', rclpy.time.Time())
+                self.process_transform(trans)
+            except Exception as e:
+                self.get_logger().info(f'Could not get transform: {e}')
 
     def process_transform(self, trans: TransformStamped):
         x = -trans.transform.translation.x
@@ -107,13 +115,15 @@ class TransformListenerNode(Node):
         self.control_robot(x, y, yaw)
 
     def control_robot(self, current_x, current_y, current_yaw):
+        if not self.is_running:  # Do not control the robot if not running
+            return
+
         goal_x, goal_y, goal_yaw = self.goal
 
         # Define thresholds
         threshold = 0.15  # Threshold for x and y
         yaw_threshold = 0.2  # Threshold for yaw
 
-        
         if self.state == 'ALIGN_YAW':
             # Calculate the desired yaw angle based on the goal yaw
             desired_yaw = goal_yaw
@@ -183,7 +193,7 @@ class TransformListenerNode(Node):
                         self.send_command(0.0, 0.0, 0.0)  # Send stop command
                     self.current_goal_index += 1  # Move to the next goal
                     if self.current_goal_index < len(self.goals):
-                        next_goal = self.goals[self.current_goal_index]
+                        next_goal = list(self.goals.values())[self.current_goal_index]
                         self.set_goal(*next_goal)  # Set the next goal
                         if self.current_goal_index == 1:  # Point B
                             time.sleep(5)  # Wait for 5 seconds at Point B
@@ -286,11 +296,13 @@ class TransformListenerNode(Node):
         return math.atan2(siny_cosp, cosy_cosp)
 
     def on_closing(self):
+        self.is_running = False  # Stop the robot when closing the GUI
         self.root.destroy()
         self.get_logger().info("GUI closed. Shutting down node.")
         rclpy.shutdown()
 
 def main(args=None):
+
     rclpy.init(args=args)
     node = TransformListenerNode()
     node.set_goal(0.0, 0.0, 0.0)  # Start at Point A
