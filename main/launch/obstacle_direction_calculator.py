@@ -60,6 +60,8 @@ class ObstacleDirectionCalculator(Node):
                 if 0 <= x_index < width and 0 <= y_index < height:
                     index = x_index + y_index * width
                     cost_value = msg.data[index]
+                    # Log the cost value for debugging
+                    self.get_logger().info(f'Checking cell ({x_index}, {y_index}) with cost value: {cost_value}')
 
                     # Check for obstacles
                     if cost_value == 100:  # Assuming 100 indicates an obstacle
