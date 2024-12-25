@@ -15,13 +15,19 @@ class ObstacleDistanceCalculator(Node):
             10
         )
 
+        # Timer to check for obstacles every second
+        self.timer = self.create_timer(1.0, self.check_for_obstacles)
+
         # Initialize distances dictionary
         self.distances = {
-            'front': float('inf'),
-            'back': float('inf'),
-            'left': float('inf'),
-            'right': float('inf')
+            'front': {'static': float('inf'), 'dynamic': float('inf')},
+            'back': {'static': float('inf'), 'dynamic': float('inf')},
+            'left': {'static': float('inf'), 'dynamic': float('inf')},
+            'right': {'static': float('inf'), 'dynamic': float('inf')}
         }
+
+        # Flag to indicate if obstacles were detected
+        self.obstacles_detected = False
 
     def scan_callback(self, msg):
         # Get the number of ranges
@@ -39,17 +45,36 @@ class ObstacleDistanceCalculator(Node):
         for direction, index in directions.items():
             distance = msg.ranges[index]
             if distance < 1.0:  # Check if the distance is less than 1 meter
-                self.distances[direction] = min(self.distances[direction], distance)
+                # Here, we would need additional logic to classify the obstacle
+                # For demonstration, we will assume all detected obstacles are static
+                self.distances[direction]['static'] = min(self.distances[direction]['static'], distance)
+                self.obstacles_detected = True  # Set flag to indicate obstacles are detected
+            else:
+                # Reset the distance if no obstacle is detected
+                self.distances[direction]['static'] = float('inf')
 
         # Log the distances
         self.log_distances()
 
+    def check_for_obstacles(self):
+        if not self.obstacles_detected:
+            self.get_logger().info('No obstacles detected. Performing update...')
+            # Here you can add logic to perform when no obstacles are detected
+            self.perform_update()
+        else:
+            self.obstacles_detected = False  # Reset the flag for the next check
+
+    def perform_update(self):
+        # Logic to perform when no obstacles are detected
+        self.get_logger().info('Performing obstacle detection update...')
+
     def log_distances(self):
-        for direction, distance in self.distances.items():
-            if distance == float('inf'):
-                self.get_logger().info(f'No obstacle detected in {direction} direction.')
-            else:
-                self.get_logger().info(f'Distance to obstacle in {direction} direction: {distance:.2f} meters')
+        for direction, types in self.distances.items():
+            for obstacle_type, distance in types.items():
+                if distance == float('inf'):
+                    self.get_logger().info(f'No {obstacle_type} obstacle detected in {direction} direction.')
+                else:
+                    self.get_logger().info(f'Distance to {obstacle_type} obstacle in {direction} direction: {distance:.2f} meters')
 
 def main(args=None):
     rclpy.init(args=args)
