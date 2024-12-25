@@ -120,17 +120,33 @@ class JointStatePublisher(Node):
 
                 self.prev_position = self.joint_state_msg.position
                 self.prev_velocity = self.joint_state_msg.velocity
-                if(self.joint_state_msg.velocity[0]==0 and self.joint_state_msg.velocity[0] ==0  and self.joint_state_msg.velocity[0] ==0 and self.joint_state_msg.velocity[0]==0):
-                    self.linear_x =0.0
-                    self.linear_y=0.0
-                else :
+
+                if(self.joint_state_msg.velocity[0]>=0 and self.joint_state_msg.velocity[0] <=0.04):
+                   self.joint_state_msg.velocity[0]=0.0
+                if(self.joint_state_msg.velocity[1]>=0 and self.joint_state_msg.velocity[1] <=0.04):
+                   self.joint_state_msg.velocity[1]=0.0
+                if(self.joint_state_msg.velocity[2]>=0 and self.joint_state_msg.velocity[2] <=0.04):
+                   self.joint_state_msg.velocity[2]=0.0
+                if(self.joint_state_msg.velocity[3]>=0 and self.joint_state_msg.velocity[3] <=0.04):
+                   self.joint_state_msg.velocity[3]=0.0
+
+                if(self.joint_state_msg.velocity[0]<=0 and self.joint_state_msg.velocity[0] >= -0.04):
+                   self.joint_state_msg.velocity[0]=0.0
+                if(self.joint_state_msg.velocity[1]<=0 and self.joint_state_msg.velocity[1] >=-0.04):
+                   self.joint_state_msg.velocity[1]=0.0
+                if(self.joint_state_msg.velocity[2]<=0 and self.joint_state_msg.velocity[2] >=-0.04):
+                   self.joint_state_msg.velocity[2]=0.0
+                if(self.joint_state_msg.velocity[3]<=0 and self.joint_state_msg.velocity[3] >=-0.04):
+                   self.joint_state_msg.velocity[3]=0.0
+             
+
                       # Calculate linear and angular velocities
-                    self.linear_x = (self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
+                self.linear_x = (self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
                                  self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
-                    self.linear_y = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
+                self.linear_y = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
                                  self.joint_state_msg.velocity[2] - self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
-                    self.angular_z = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] -
-                                  self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * self.wheel_base)
+                self.angular_z = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] -
+                                  self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * 0.1475)
 
               
 
@@ -155,19 +171,12 @@ class JointStatePublisher(Node):
             self.get_logger().error(f"Error parsing data: {e}")
 
     def update_base_link_position(self, linear_x, linear_y, angular_z):
-       dt = 0.05  # Time step based on the timer interval
+       dt = 0.01  # Time step based on the timer interval
 
-        if(linear_x ==0 and linear_y==0):
-            self.base_link_x = lastX
-            self.base_link_y = lastY
-            self.base_link_z = lastZ
-        else :
-            self.base_link_x += (linear_x * math.cos(self.orientation) - linear_y * math.sin(self.orientation)) * dt
-            self.base_link_y += (linear_x * math.sin(self.orientation) + linear_y * math.cos(self.orientation)) * dt
-            self.base_link_z = 0.0  # Assuming constant height
-            lastX = self.base_link_x
-            lastY = self.base_link_y
-            lastZ = self.base_link_z
+       self.base_link_x += (linear_x * math.cos(self.orientation) - linear_y * math.sin(self.orientation)) * dt
+       self.base_link_y += (linear_x * math.sin(self.orientation) + linear_y * math.cos(self.orientation)) * dt
+       self.base_link_z = 0.0  # Assuming constant height
+
 
     def publish_transform(self):
         t = TransformStamped()
