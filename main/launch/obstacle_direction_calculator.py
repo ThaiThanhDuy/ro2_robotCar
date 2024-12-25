@@ -35,10 +35,10 @@ class ObstacleDistanceCalculator(Node):
 
         # Define the angles for each direction
         directions = {
-            'front': 0,                # 0 degrees
-            'back': num_ranges // 2,   # 180 degrees
-            'left': num_ranges // 4,   # 90 degrees
-            'right': (3 * num_ranges) // 4  # 270 degrees
+            'front': num_ranges // 2,                # 0 degrees
+            'back': 0,   # 180 degrees
+            'left': (3 * num_ranges) // 4,   # 90 degrees
+            'right': num_ranges // 4  # 270 degrees
         }
 
         # Calculate distances for each direction
