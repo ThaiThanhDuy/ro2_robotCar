@@ -82,17 +82,14 @@ class TransformListenerNode(Node):
         if selected_goal in self.goals:
             x, y, yaw = self.goals[selected_goal]
             self.set_goal(x, y, yaw)
+            self.current_goal_index = list(self.goals.keys()).index(selected_goal)  # Update current goal index
+            self.get_logger().info(f"New goal set: {selected_goal} at (x={x}, y={y}, yaw={yaw})")  # Log the new goal
         else:
             messagebox.showerror("Input Error", "Please select a valid goal.")
 
     def run_robot(self):
         self.is_running = True  # Set the flag to indicate the robot should run
-        if self.current_goal_index < len(self.goals):
-            next_goal = list(self.goals.values())[self.current_goal_index]
-            self.set_goal(*next_goal)
-            self.get_logger().info(f"Running to goal: {next_goal}")
-        else:
-            messagebox.showinfo("Info", "All goals have been reached.")
+        self.get_logger().info(f"Running to goal: {self.goal}")
 
     def set_goal(self, x, y, yaw):
         self.goal = (x, y, yaw)
@@ -101,7 +98,7 @@ class TransformListenerNode(Node):
     def timer_callback(self):
         if self.is_running:  # Only process transforms if the robot is running
             try:
-                trans = self.tf_buffer.lookup_transform('base_link', 'odom', rclpy.time.Time())
+                trans = self.tf_buffer.lookup_transform(' base_link', 'odom', rclpy.time.Time())
                 self.process_transform(trans)
             except Exception as e:
                 self.get_logger().info(f'Could not get transform: {e}')
@@ -302,7 +299,6 @@ class TransformListenerNode(Node):
         rclpy.shutdown()
 
 def main(args=None):
-
     rclpy.init(args=args)
     node = TransformListenerNode()
     node.set_goal(0.0, 0.0, 0.0)  # Start at Point A
