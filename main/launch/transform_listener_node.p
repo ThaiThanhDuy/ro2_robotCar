@@ -3,10 +3,10 @@ from rclpy.node import Node
 from tf2_ros import Buffer, TransformListener
 from geometry_msgs.msg import TransformStamped
 import math
-import serial  # Ensure you have the pyserial package installed
+import serial
 import time
-import tkinter as tk  # Import tkinter for GUI
-from threading import Thread  # Import Thread for running the robot control in a separate thread
+import tkinter as tk
+from tkinter import messagebox
 
 class TransformListenerNode(Node):
     def __init__(self):
@@ -16,17 +16,16 @@ class TransformListenerNode(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        # Initialize serial ports
-        self.command_serial_port = serial.Serial('/dev/ttyUSB1', 115200, timeout=1)  # For movement commands
-        # self.character_serial_port = serial.Serial('/dev/ttyUSB2', 115200, timeout=1)  # For sending characters
+        # Initialize serial port (replace with your actual port)
+        self.serial_port = serial.Serial('/dev/ttyUSB1', 115200, timeout=1)
         self.command_in_progress = False
 
         # Timer to periodically get the transformation
-        self.timer = self.create_timer(0.1, self.timer_callback)  # 0.1 second interval
+        self.timer = self.create_timer(0.1, self.timer_callback)
 
         # Goal parameters (x, y, yaw)
-        self.goal = (0.0, 0.0, 0.0)  # Initialize goal (x, y, yaw)
-        self.state = 'ALIGN_YAW'  # Initial state
+        self.goal = (0.0, 0.0, 0.0)
+        self.state = 'ALIGN_YAW'
 
         # Define the sequence of goals
         self.goals = [
@@ -34,33 +33,72 @@ class TransformListenerNode(Node):
             (1.0, 1.0, 0.0),  # Point B
             (2.0, 0.0, 0.0)   # Point C
         ]
-        self.current_goal_index = 0  # Start with the first goal
+        self.current_goal_index = 0
+
+        # Initialize GUI
+        self.init_gui()
+
+    def init_gui(self):
+        self.root = tk.Tk()
+        self.root.title("Robot Goal Setter")
+
+        # Create input fields for goals
+        tk.Label(self.root, text="Goal X:").pack()
+        self.goal_x_entry = tk.Entry(self.root)
+        self.goal_x_entry.pack()
+
+        tk.Label(self.root, text="Goal Y:").pack()
+        self.goal_y_entry = tk.Entry(self.root)
+        self.goal_y_entry.pack()
+
+        tk.Label(self.root, text="Goal Yaw:").pack()
+        self.goal_yaw_entry = tk.Entry(self.root)
+        self.goal_yaw_entry.pack()
+
+        # Create a button to set the goal
+        self.set_goal_button = tk.Button(self.root, text="Set Goal", command=self.set_goal_from_input)
+        self.set_goal_button.pack()
+
+        # Create a button to run the robot
+        self.run_button = tk.Button(self.root, text="Run", command=self.run_robot)
+        self.run_button.pack()
+
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def set_goal_from_input(self):
+        try:
+            x = float(self.goal_x_entry.get())
+            y = float(self.goal_y_entry.get())
+            yaw = float(self.goal_yaw_entry.get())
+            self.set_goal(x, y, yaw)
+        except ValueError:
+            messagebox.showerror("Input Error", "Please enter valid numbers for x, y, and yaw.")
+
+    def run_robot(self):
+        if self.current_goal_index < len(self.goals):
+            next_goal = self.goals[self.current_goal_index]
+            self.set_goal(*next_goal)
+            self.get_logger().info(f"Running to goal: {next_goal}")
+        else:
+            messagebox.showinfo("Info", "All goals have been reached.")
 
     def set_goal(self, x, y, yaw):
-        """Set the goal position and orientation."""
         self.goal = (x, y, yaw)
         self.get_logger().info(f"Goal set to: x={x}, y={y}, yaw={yaw}")
 
     def timer_callback(self):
         try:
-            # Get the transformation from 'odom' to 'base_link'
             trans = self.tf_buffer.lookup_transform('base_link', 'odom', rclpy.time.Time())
             self.process_transform(trans)
         except Exception as e:
             self.get_logger().info(f'Could not get transform: {e}')
 
     def process_transform(self, trans: TransformStamped):
-        # Extract translation
         x = -trans.transform.translation.x
         y = -trans.transform.translation.y
-        
-        # Convert quaternion to yaw
         yaw = -self.quaternion_to_yaw(trans.transform.rotation)
 
-        # Log the current position
         self.get_logger().info(f'Current Position: x={x}, y={y}, Yaw={yaw}')
-
-        # Control the robot based on the goal
         self.control_robot(x, y, yaw)
 
     def control_robot(self, current_x, current_y, current_yaw):
@@ -83,19 +121,21 @@ class TransformListenerNode(Node):
 
             # Control logic for yaw adjustment
             if abs(yaw_difference) > yaw_threshold:  # Threshold to avoid oscillation
-                angular_z = 0.2 if yaw_difference > 0 else -0.2  # Left or right spin speed
+                if yaw_difference > 0:
+                    angular_z = 0.2  # Left spin speed
+                else:
+                    angular_z = -0.2  # Right spin speed
                 linear_x = 0.0
                 linear_y = 0.0
             else:
                 # Stop spinning if within threshold
                 angular_z = 0.0
                 self.state = 'MOVE_X'  # Transition to moving in x direction
-		
+
         elif self.state == 'MOVE_X':
             time.sleep(1.5)
             # Calculate the distance to the goal in x
-            distance_to_goal_x ```python
-            = goal_x - current_x
+            distance_to_goal_x = goal_x - current_x
 
             # Check if within threshold for x
             if abs(distance_to_goal_x) < threshold:
@@ -104,7 +144,16 @@ class TransformListenerNode(Node):
                 self.state = 'MOVE_Y'  # Transition to moving in y direction
             else:
                 # Move towards the goal in x direction
-                linear_x = 0.06 if distance_to_goal_x >= 0.1 else 0.05 if distance_to_goal_x > 0 else -0.06 if distance_to_goal_x <= -0.1 else -0.05
+                if distance_to_goal_x > 0:
+                    if distance_to_goal_x < 0.1:
+                        linear_x = 0.05
+                    else:
+                        linear_x = 0.06 
+                else:
+                    if distance_to_goal_x > -0.1:
+                        linear_x = -0.05
+                    else:
+                        linear_x = -0.06
                 linear_y = 0.0
                 angular_z = 0.0
 
@@ -124,10 +173,16 @@ class TransformListenerNode(Node):
                 # Check if the robot is at the goal and aligned
                 if abs(current_x - goal_x) < threshold and abs(current_y - goal_y) < threshold and abs(current_yaw - goal_yaw) < yaw_threshold:
                     self.get_logger().info(f"Robot has reached goal at Point {'A' if self.current_goal_index == 0 else 'B' if self.current_goal_index == 1 else 'C'}.")
+                    if self.current_goal_index == 0:  # If at Point A again
+                        self.send_command(0.0, 0.0, 0.0)  # Send stop command
                     self.current_goal_index += 1  # Move to the next goal
                     if self.current_goal_index < len(self.goals):
                         next_goal = self.goals[self.current_goal_index]
                         self.set_goal(*next_goal)  # Set the next goal
+                        if self.current_goal_index == 1:  # Point B
+                            time.sleep(5)  # Wait for 5 seconds at Point B
+                        if self.current_goal_index == 2:  # Point C
+                            time.sleep(3)  # Wait for 3 seconds at Point C
                     else:
                         self.get_logger().info("All goals reached. Returning to Point A.")
                         self.set_goal(0.0, 0.0, 0.0)  # Return to Point A
@@ -137,7 +192,16 @@ class TransformListenerNode(Node):
                 return
             else:
                 # Move towards the goal in y direction
-                linear_y = 0.07 if distance_to_goal_y > 0.1 else 0.04 if distance_to_goal_y > 0 else -0.07 if distance_to_goal_y < -0.1 else -0.04
+                if distance_to_goal_y > 0:
+                    if distance_to_goal_y < 0.1:
+                        linear_y = 0.04
+                    else:
+                        linear_y = 0.07 
+                else:
+                    if distance_to_goal_y > -0.1:
+                        linear_y = -0.04
+                    else:
+                        linear_y = -0.07
                 linear_x = 0.0
                 angular_z = 0.0
 
@@ -150,7 +214,7 @@ class TransformListenerNode(Node):
             return
 
         # Check if the serial port is open
-        if self.command_serial_port is None or not self.command_serial_port.is_open:
+        if self.serial_port is None or not self.serial_port.is_open:
             self.get_logger().warn("Cannot send command: Port is not open.")
             return
 
@@ -180,7 +244,6 @@ class TransformListenerNode(Node):
             rear_right_velocity *= 2.0
 
             # Round velocities to two decimal places
-            ```python
             front_left_velocity = round(front_left_velocity, 2)
             front_right_velocity = round(front_right_velocity, 2)
             rear_left_velocity = round(rear_left_velocity, 2)
@@ -188,13 +251,22 @@ class TransformListenerNode(Node):
 
             # Send the new command to the STM32
             command = f"c:{front_left_velocity},{front_right_velocity},{rear_left_velocity},{rear_right_velocity}\n"
-            self.command_serial_port.write(command.encode())
+            self.serial_port.write(command.encode())
+          
             self.get_logger().info(f"Sending command: {command.strip()}")
 
         except ValueError:
             self.get_logger().error("Invalid input. Please enter numeric values.")
         finally:
             self.command_in_progress = False  # Reset the state variable
+
+    def send_character(self, char):
+        """Send a character to the serial port."""
+        if self.serial_port is None or not self.serial_port.is_open:
+            self.get_logger().warn("Cannot send character: Port is not open.")
+            return
+        self.serial_port.write(char.encode())
+        self.get_logger().info(f"Sent character: {char}")
 
     def quaternion_to_yaw(self, quaternion):
         """Convert quaternion to yaw angle."""
@@ -207,58 +279,16 @@ class TransformListenerNode(Node):
         cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
         return math.atan2(siny_cosp, cosy_cosp)
 
-    def run_sequence(self):
-        """Run the sequence from A to B to C and back to A."""
-        for goal in self.goals:
-            self.set_goal(*goal)
-            while self.state != 'ALIGN_YAW':
-                time.sleep(0.1)  # Wait until the robot reaches the goal
-
-class GUI:
-    def __init__(self, node):
-        self.node = node
-        self.window = tk.Tk()
-        self.window.title("Robot Control")
-
-        # Input fields for points B and C
-        tk.Label(self.window, text="Point B (x, y):").grid(row=0, column=0)
-        self.point_b_x = tk.Entry(self.window)
-        self.point_b_y = tk.Entry(self.window)
-        self.point_b_x.grid(row=0, column=1)
-        self.point_b_y.grid(row=0, column=2)
-
-        tk.Label(self.window, text="Point C (x, y):").grid(row=1, column=0)
-        self.point_c_x = tk.Entry(self.window)
-        self.point_c_y = tk.Entry(self.window)
-        self.point_c_x.grid(row=1, column=1)
-        self.point_c_y.grid(row=1, column=2)
-
-        # Button to start the sequence
-        self.start_button = tk.Button(self.window, text="Start Sequence", command=self.start_sequence)
-        self.start_button.grid(row=2, column=0, columnspan=3)
-
-    def start_sequence(self):
-        # Get points B and C from input fields
-        try:
-            b_x = float(self.point_b_x.get())
-            b_y = float(self.point_b_y.get())
-            c_x = float(self.point_c_x.get())
-            c_y = float(self.point_c_y.get())
-            self.node.goals[1] = (b_x, b_y, 0.0)  # Update Point B
-            self.node.goals[2] = (c_x, c_y, 0.0)  # Update Point C
-            self.node.current_goal_index = 0  # Reset to start from Point A
-            Thread(target=self.node.run_sequence).start()  # Run the sequence in a separate thread
-        except ValueError:
-            print("Please enter valid numeric values for points.")
-
-    def run(self):
-        self.window.mainloop()
+    def on_closing(self):
+        self.root.destroy()
+        self.get_logger().info("GUI closed. Shutting down node.")
+        rclpy.shutdown()
 
 def main(args=None):
     rclpy.init(args=args)
     node = TransformListenerNode()
-    gui = GUI(node)
-    gui.run()
+    node.set_goal(0.0, 0.0, 0.0)  # Start at Point A
+    rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
 
