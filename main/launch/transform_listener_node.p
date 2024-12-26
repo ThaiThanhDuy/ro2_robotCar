@@ -6,6 +6,7 @@ import math
 import serial  # Ensure you have the pyserial package installed
 import time
 from sensor_msgs.msg import LaserScan
+import numpy as np
 
 class TransformListenerNode(Node):
     def __init__(self):
@@ -29,27 +30,33 @@ class TransformListenerNode(Node):
         # Define the sequence of goals
         self.goals = [
             (0.0, 0.0, 0.0),  # Point A
-            (1.0, 1.0, 0.0),  # Point B
+            (1.0, 0.0, 0.0),  # Point B
             (2.0, 0.0, 0.0)   # Point C
         ]
         self.current_goal_index = 0  # Start with the first goal
-
-        # Subscribe to the LaserScan data
+        
         self.scan_subscriber = self.create_subscription(
             LaserScan,
             '/scan',
             self.scan_callback,
             10
         )
-
-        # Initialize distances dictionary
+          # Initialize distances dictionary
         self.distances = {
             'front': {'static': float('inf')},
             'back': {'static': float('inf')},
             'left': {'static': float('inf')},
             'right': {'static': float('inf')},
+            'Northeast': {'static': float('inf')},
+            'Southwest': {'static': float('inf')},
+            'Northwest': {'static': float('inf')},
+            'Southeast': {'static': float('inf')},
+            
         }
 
+        # Flag to indicate if obstacles were detected
+        self.obstacles_detected = False
+        self.obstacle_threshold = 0.5  # Threshold for obstacle detection
     def scan_callback(self, msg):
         # Get the number of ranges
         num_ranges = len(msg.ranges)
@@ -59,7 +66,11 @@ class TransformListenerNode(Node):
             'front': num_ranges // 2,                # 0 degrees
             'back': 0,   # 180 degrees
             'left': (3 * num_ranges) // 4,   # 90 degrees
-            'right': num_ranges // 4,  # 270 degrees
+            'right': num_ranges // 4 , # 270 degrees
+            'Northeast': num_ranges // 8,                # 45 degrees
+            'Southwest': 5 * num_ranges // 8,             # 225 degrees
+            'Northwest': 3 * num_ranges // 8,             # 135 degrees
+            'Southeast': 7 * num_ranges // 8             # 315 degrees
         }
 
         # Calculate distances for each direction
@@ -69,9 +80,18 @@ class TransformListenerNode(Node):
                 # Here, we would need additional logic to classify the obstacle
                 # For demonstration, we will assume all detected obstacles are static
                 self.distances[direction]['static'] = min(self.distances[direction]['static'], distance)
+                self.obstacles_detected = True  # Set flag to indicate obstacles are detected
             else:
                 # Reset the distance if no obstacle is detected
                 self.distances[direction]['static'] = float('inf')
+
+
+
+	
+    def set_goal(self, x, y, yaw):
+        """Set the goal position and orientation."""
+        self.goal = (x, y, yaw)
+        self.get_logger().info(f"Goal set to: x={x}, y={y}, yaw={yaw}")
 
     def timer_callback(self):
         try:
@@ -101,7 +121,6 @@ class TransformListenerNode(Node):
         # Define thresholds
         threshold = 0.15  # Threshold for x and y
         yaw_threshold = 0.2  # Threshold for yaw
-        obstacle_threshold = 0.5  # Threshold for obstacle detection
 
         if self.state == 'ALIGN_YAW':
             # Calculate the desired yaw angle based on the goal yaw
@@ -126,56 +145,46 @@ class TransformListenerNode(Node):
                 # Stop spinning if within threshold
                 angular_z = 0.0
                 self.state = 'MOVE_X'  # Transition to moving in x direction
-
+		
         elif self.state == 'MOVE_X':
             time.sleep(1.5)
-            # Check for obstacles in front
-            if self.distances['front']['static'] < obstacle_threshold:
+             # Check for obstacles in front
+            if self.distances['front']['static'] < 0.5:
                 self.get_logger().info("Obstacle detected in front! Stopping the robot.")
                 linear_x = 0.0
                 linear_y = 0.0
                 angular_z = 0.0
                 self.send_command(linear_x, linear_y, angular_z)  # Send stop command
                 return  # Exit the function to prevent further movement
-
-            # Calculate the distance to the goal in x
-            distance_to_goal_x = goal_x - current_x
-
-            # Check if within threshold for x
-            if abs(distance_to_goal_x) < threshold:
-                # Stop if within threshold for x
-                linear_x = 0.0
-                self.state = 'MOVE_Y'  # Transition to moving in y direction
             else:
-                # Move towards the goal in x direction
-                if distance_to_goal_x > 0:
-                    linear_x = 0.06  # Move forward
+                distance_to_goal_x = goal_x - current_x
+                if abs(distance_to_goal_x) < threshold:
+        # Stop if within threshold for x
+                    linear_x = 0.0
+                    self.state = 'MOVE_Y'  # Transition to moving in y direction
                 else:
-                    linear_x = -0.06  # Move backward
+        # Move towards the goal in x direction
+                     if distance_to_goal_x > 0:
+                        if distance_to_goal_x < 0.1:
+                            linear_x = 0.05
+                        else:
+                            linear_x = 0.06
+                     else:
+                        if distance_to_goal_x > -0.1:
+                            linear_x = -0.05
+                        else:
+                            linear_x = -0.06
+
                 linear_y = 0.0
                 angular_z = 0.0
-
+                	
+                 
+           
         elif self.state == 'MOVE_Y':
             time.sleep(1)
-            # Check for obstacles based on the direction of movement
-            if goal_y > current_y:  # Moving in positive y direction
-                if self.distances['left']['static'] < obstacle_threshold:
-                    self.get_logger().info("Obstacle detected on the left! Stopping the robot.")
-                    linear_y = 0.0
-                    linear_x = 0.0
-                    angular_z = 0.0
-                    self.send_command(linear_x, linear_y, angular_z)  # Send stop command
-                    return  # Exit the function to prevent further movement
-            else:  # Moving in negative y direction
-                if self.distances['right']['static'] < obstacle_threshold:
-                    self.get_logger().info("Obstacle detected on the right! Stopping the robot.")
-                    linear_y = 0.0
-                    linear_x = 0.0
-                    angular_z = 0.0
-                    self.send_command(linear_x, linear_y, angular_z)  # Send stop command
-                    return  # Exit the function to prevent further movement
-
             # Calculate the distance to the goal in y
+
+
             distance_to_goal_y = goal_y - current_y
 
             # Check if within threshold for y
@@ -209,9 +218,31 @@ class TransformListenerNode(Node):
             else:
                 # Move towards the goal in y direction
                 if distance_to_goal_y > 0:
-                    linear_y = 0.07  # Move forward in y
+                    if self.distances['left']['static'] < 0.15:
+                        self.get_logger().info("Obstacle detected on the left! Stopping the robot.")
+                        linear_y = 0.0
+                        linear_x = 0.0
+                        angular_z = 0.0
+                        self.send_command(linear_x, linear_y, angular_z)  # Send stop command
+                        return  # Exit the function to prevent further movement
+                    else:
+                        if distance_to_goal_y < 0.1:
+                            linear_y = 0.04
+                        else:
+                            linear_y = 0.07 
                 else:
-                    linear_y = -0.07  # Move backward in y
+                    if self.distances['right']['static'] < 0.15:
+                        self.get_logger().info("Obstacle detected on the left! Stopping the robot.")
+                        linear_y = 0.0
+                        linear_x = 0.0
+                        angular_z = 0.0
+                        self.send_command(linear_x, linear_y, angular_z)  # Send stop command
+                        return  # Exit the function to prevent further movement
+                    else :
+                        if distance_to_goal_y > -0.1:
+                            linear_y = -0.04
+                        else:
+                            linear_y = -0.07
                 linear_x = 0.0
                 angular_z = 0.0
 
@@ -219,39 +250,72 @@ class TransformListenerNode(Node):
         self.send_command(linear_x, linear_y, angular_z)
 
     def send_command(self, linear_x, linear_y, angular_z):
-        # Construct the command string and send it to the robot
-        command = f"{linear_x},{linear_y},{angular_z}\n"
-        self.serial_port.write(command.encode('utf-8'))
-        self.get_logger().info(f"Command sent: {command.strip()}")
+        if self.command_in_progress:
+            self.get_logger().warn("Previous command still in progress. Please wait.")
+            return
+
+        # Check if the serial port is open
+        if self.serial_port is None or not self.serial_port.is_open:
+            self.get_logger().warn("Cannot send command: Port is not open.")
+            return
+
+        self.command_in_progress = True
+        try:
+            wheel_radius = 0.0485  # Adjust to your robot's wheel radius
+            wheel_base = 0.38     # Distance between front and rear wheels
+
+            # Calculate individual wheel velocities
+            front_left_velocity = (linear_x - linear_y - (wheel_base * angular_z / 2))
+            front_right_velocity = (linear_x + linear_y + (wheel_base * angular_z / 2))
+            rear_left_velocity = (linear_x + linear_y - (wheel_base * angular_z / 2))
+            rear_right_velocity = (linear_x - linear_y + (wheel_base * angular_z / 2))
+
+           # Check if velocities are within the range -0.27 to 0.27
+            if (abs(front_left_velocity) > 0.27 or
+                abs(front_right_velocity) > 0.27 or
+                abs(rear_left_velocity) > 0.27 or
+                abs(rear_right_velocity) > 0.27):
+                self.get_logger().warn("One or more velocities are out of range. Command not sent.")
+                return  # Skip sending the command if any velocity is out of range
+
+            # Scale velocities if necessary
+            front_left_velocity *= 2.0
+            front_right_velocity *= 2.0
+            rear_left_velocity *= 2.0
+            rear_right_velocity *= 2.0
+
+            # Round velocities to two decimal places
+            front_left_velocity = round(front_left_velocity, 2)
+            front_right_velocity = round(front_right_velocity, 2)
+            rear_left_velocity = round(rear_left_velocity, 2)
+            rear_right_velocity = round(rear_right_velocity, 2)
+
+            # Send the new command to the STM32
+            command = f"c:{front_left_velocity},{front_right_velocity},{rear_left_velocity},{rear_right_velocity}\n"
+            self.serial_port.write(command.encode())
+          
+            self.get_logger().info(f"Sending command: {command.strip()}")
+
+        except ValueError:
+            self.get_logger().error("Invalid input. Please enter numeric values.")
+        finally:
+            self.command_in_progress = False  # Reset the state variable
 
     def quaternion_to_yaw(self, quaternion):
-        # Convert quaternion to yaw angle
+        """Convert quaternion to yaw angle."""
         x = quaternion.x
         y = quaternion.y
         z = quaternion.z
         w = quaternion.w
-        # Roll (x-axis rotation)
-        sinr_cosp = 2 * (w * x + y * z)
-        cosr_cosp = 1 - 2 * (x * x + y * y)
-        roll = math.atan2(sinr_cosp, cosr_cosp)
-
-        # Pitch (y-axis rotation)
-        sinp = 2 * (w * y - z * x)
-        if abs(sinp) >= 1:
-            pitch = math.copysign(math.pi / 2, sinp)  # Use 90 degrees if out of range
-        else:
-            pitch = math.asin(sinp)
-
-        # Yaw (z-axis rotation)
-        siny_cosp = 2 * (w * z + x * y)
-        cosy_cosp = 1 - 2 * (y * y + z * z)
-        yaw = math.atan2(siny_cosp, cosy_cosp)
-
-        return yaw
+        # Calculate yaw
+        siny_cosp = 2.0 * (w * z + x * y)
+        cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
+        return math.atan2(siny_cosp, cosy_cosp)
 
 def main(args=None):
     rclpy.init(args=args)
     node = TransformListenerNode()
+    node.set_goal(0.0, 0.0, 0.0)  # Start at Point A
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
