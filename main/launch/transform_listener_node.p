@@ -199,9 +199,11 @@ class TransformListenerNode(Node):
                 # Check if the robot is at the goal and aligned
                 if abs(current_x - goal_x) < threshold and abs(current_y - goal_y) < threshold and abs(current_yaw - goal_yaw) < yaw_threshold:
                     self.get_logger().info(f"Robot has reached goal at Point {'A' if self.current_goal_index == 0 else 'B' if self.current_goal_index == 1 else 'C'}.")
+                    self.get_logger().info("Waiting 'P'")
+                    self.wait_for_response('P')  # Wait for 'N'
                     if self.current_goal_index == 0:  # If at Point A again
                         self.send_command(0.0, 0.0, 0.0)  # Send stop command
-                        self.send_character('A')  # Send 'A' to the character port
+                   
                         self.current_goal_index += 1  # Move to the next goal
                         
                     if self.current_goal_index < len(self.goals):
@@ -210,7 +212,8 @@ class TransformListenerNode(Node):
                         if self.current_goal_index == 1:  # Point B
                             time.sleep(1)  # Wait for 5 seconds at Point B
                             self.get_logger().info("Reached goal B. Sending 'B'...")
-                            self.send_character('B')  # Send 'B' to the character port
+                            self.send_character('A')  # Send 'B' to the character port
+                            self.get_logger().info("Waiting 'N'")
                             self.wait_for_response('N')  # Wait for 'N'
                             self.get_logger().info("Received 'N', proceeding to Point C.")
                             self.current_goal_index += 1  # Move to the next goal
@@ -218,12 +221,13 @@ class TransformListenerNode(Node):
                         if self.current_goal_index == 2:  # Point C
                             time.sleep(1)  # Wait for 3 seconds at Point C
                             self.get_logger().info("Reached goal C. Sending 'C'...")
-                            self.send_character('C')  # Send 'C' to the character port
+                            self.send_character('I')  # Send 'C' to the character port
+                            self.get_logger().info("Waiting 'M'")
                             self.wait_for_response('M')  # Wait for 'M'
                             self.get_logger().info("Received 'M', proceeding to Point A.")
                             self.current_goal_index += 1  # Move to the next goal
                     else:
-                        self.send_character('A')  # Send 'A' to the character port
+                        
                         self.get_logger().info("All goals reached. Returning to Point A.")
                         self.set_goal(0.0, 0.0, 0.0)  # Return to Point A
                 else:
