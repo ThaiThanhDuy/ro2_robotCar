@@ -57,6 +57,7 @@ class TransformListenerNode(Node):
         # Flag to indicate if obstacles were detected
         self.obstacles_detected = False
         self.obstacle_threshold = 0.5  # Threshold for obstacle detection
+	self.prev_ranges = None
     def scan_callback(self, msg):
         # Get the number of ranges
         num_ranges = len(msg.ranges)
@@ -72,7 +73,16 @@ class TransformListenerNode(Node):
             'Northwest': 3 * num_ranges // 8,             # 135 degrees
             'Southeast': 7 * num_ranges // 8             # 315 degrees
         }
-
+	# Kiểm tra nếu có sự thay đổi trong msg.ranges
+        if self.prev_ranges is not None:
+            # So sánh ranges cũ và mới
+            if msg.ranges != self.prev_ranges:
+                self.get_logger().info("Data has changed!")
+            else:
+                self.get_logger().info("No change in data.")
+        
+        # Cập nhật self.prev_ranges với dữ liệu mới
+        self.prev_ranges = msg.ranges
         # Calculate distances for each direction
         for direction, index in directions.items():
 		
