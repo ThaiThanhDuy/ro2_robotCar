@@ -75,6 +75,7 @@ class TransformListenerNode(Node):
 
         # Calculate distances for each direction
         for direction, index in directions.items():
+		
             distance = msg.ranges[index]
             if distance < 1.0:  # Check if the distance is less than 1 meter
                 # Here, we would need additional logic to classify the obstacle
@@ -83,7 +84,8 @@ class TransformListenerNode(Node):
                 self.obstacles_detected = True  # Set flag to indicate obstacles are detected
             else:
                 # Reset the distance if no obstacle is detected
-                self.distances[direction]['static'] = float('inf')
+                self.distances[direction]['static'] = max(self.distances[direction]['static'], distance)
+	
 
     def set_goal(self, x, y, yaw):
         """Set the goal position and orientation."""
