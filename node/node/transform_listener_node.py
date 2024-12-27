@@ -58,18 +58,10 @@ class TransformListenerNode(Node):
         self.obstacles_detected = False
         self.obstacle_threshold = 0.5  # Threshold for obstacle detection
 
-	self.last_scan_time = self.get_clock().now()  # Initialize last scan time
-  def scan_callback(self, msg):
-        current_time = self.get_clock().now()
-        time_since_last_scan = (current_time - self.last_scan_time).nanoseconds / 1e9  # Convert to seconds
+    def scan_callback(self, msg):
 
-        # Only process the scan if 0.1 seconds have passed
-        if time_since_last_scan < 0.1:
-            return  # Skip processing if not enough time has passed
 
-        # Update the last scan time
-        self.last_scan_time = current_time
-
+     
         # Get the number of ranges
         num_ranges = len(msg.ranges)
 
@@ -174,6 +166,8 @@ class TransformListenerNode(Node):
                         if self.distances['front']['static'] > 1.0 and self.distances['Northeast']['static'] > 1.0:
                             self.get_logger().info("NO Obstacle F and NE detected !")
                             self.obstacle='NO'
+                    return
+		
                   
                 if self.distances['right']['static'] < 1.5:
                     while(self.obstacle=='Yes'):
@@ -186,6 +180,7 @@ class TransformListenerNode(Node):
                         if self.distances['front']['static'] > 1.0 and self.distances['Northwest']['static'] > 1.0:
                             self.get_logger().info("NO Obstacle F and NW detected !")
                             self.obstacle='NO'
+                    return
 
                     
                     
@@ -199,6 +194,7 @@ class TransformListenerNode(Node):
                         if self.distances['left']['static'] > 1.0 or self.distances['right']['static'] > 1.0:
                             self.get_logger().info("NO Obstacle L and R detected !")
                             self.obstacle='NO'
+                    return
                     
                
             else:	
