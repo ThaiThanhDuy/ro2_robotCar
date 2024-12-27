@@ -85,7 +85,6 @@ class TransformListenerNode(Node):
                 # Reset the distance if no obstacle is detected
                 self.distances[direction]['static'] = float('inf')
 
-	
     def set_goal(self, x, y, yaw):
         """Set the goal position and orientation."""
         self.goal = (x, y, yaw)
@@ -94,18 +93,18 @@ class TransformListenerNode(Node):
     def timer_callback(self):
         try:
             # Get the transformation from 'odom' to 'base_link'
-            trans = self.tf_buffer.lookup_transform('base_link', 'odom', rclpy.time.Time())
+            trans = self.tf_buffer.lookup_transform('odom', 'base_link', rclpy.time.Time())
             self.process_transform(trans)
         except Exception as e:
             self.get_logger().info(f'Could not get transform: {e}')
 
     def process_transform(self, trans: TransformStamped):
         # Extract translation
-        x = -trans.transform.translation.x
-        y = -trans.transform.translation.y
+        x = trans.transform.translation.x
+        y = trans.transform.translation.y
         
         # Convert quaternion to yaw
-        yaw = -self.quaternion_to_yaw(trans.transform.rotation)
+        yaw = self.quaternion_to_yaw(trans.transform.rotation)
 
         # Log the current position
         self.get_logger().info(f'Current Position: x={x}, y={y}, Yaw={yaw}')
@@ -115,10 +114,12 @@ class TransformListenerNode(Node):
 
     def control_robot(self, current_x, current_y, current_yaw):
         goal_x, goal_y, goal_yaw = self.goal
-
+        linear_x = 0.0
+        linear_y = 0.0
+        angular_z = 0.0
         # Define thresholds
-        threshold = 0.15  # Threshold for x and y
-        yaw_threshold = 0.2  # Threshold for yaw
+        threshold = 0.2  # Threshold for x and y
+        yaw_threshold = 0.1  # Threshold for yaw
 
         if self.state == 'ALIGN_YAW':
             # Calculate the desired yaw angle based on the goal yaw
@@ -147,50 +148,56 @@ class TransformListenerNode(Node):
         elif self.state == 'MOVE_X':
             time.sleep(1.5)
              # Check for obstacles in front
-            if self.distances['front']['static'] < 0.5:
-                if self.distances['left']['static'] < 0.5:
+             # Check for obstacles in front
+            if self.distances['front']['static'] < 1.0:
+                if self.distances['left']['static'] < 1.0:
                     self.get_logger().info("Obstacle detected in left!")
                     linear_x = 0.0
-                    linear_y = -0.05
+                    linear_y = -0.1
                     angular_z = 0.0
                     self.send_command(linear_x, linear_y, angular_z)  # Send stop command
-                    if self.distances['front']['static'] < 0.5:
+                    if self.distances['front']['static'] > 1.0 and self.distances['Northeast']['static'] > 1.0:
                         return  # Exit the function to prevent further movement
                   
-                if self.distances['right']['static'] < 0.5:
+                elif self.distances['right']['static'] < 1.5:
                     self.get_logger().info("Obstacle detected in font and right!")
                     linear_x = 0.0
-                    linear_y = 0.05
+                    linear_y = 0.1
                     angular_z = 0.0
                     self.send_command(linear_x, linear_y, angular_z)  # Send stop command
-                    if self.distances['front']['static'] < 0.5:
+                    if self.distances['front']['static'] > 1.0 and self.distances['Northwest']['static'] > 1.0:
                         return  # Exit the function to prevent further movement
                 
-                if self.distances['left']['static'] < 0.5 and self.distances['right']['static'] < 0.5:
+                elif self.distances['left']['static'] < 1.0 and self.distances['right']['static'] < 1.0:
                     self.get_logger().info("Obstacle detected in robot! Stopping the robot.")
                     linear_x = 0.0
-                    linear_y = 0.04
+                    linear_y = 0.0
                     angular_z = 0.0
                     self.send_command(linear_x, linear_y, angular_z)  # Send stop command
                     return  # Exit the function to prevent further movement
                 else:
-                    distance_to_goal_x = goal_x - current_x
-                    if abs(distance_to_goal_x) < threshold:
+                    linear_x = 0.0
+                    linear_y = 0.0
+                    angular_z = 0.0
+                    self.send_command(linear_x, linear_y, angular_z)  # Send stop command
+            else:	
+                distance_to_goal_x = goal_x - current_x
+                if abs(distance_to_goal_x) < threshold:
         # Stop if within threshold for x
-                        linear_x = 0.0
-                        self.state = 'MOVE_Y'  # Transition to moving in y direction
-                    else:
+                    linear_x = 0.0
+                    self.state = 'MOVE_Y'  # Transition to moving in y direction
+                else:
         # Move towards the goal in x direction
-                        if distance_to_goal_x > 0:
-                            if distance_to_goal_x < 0.1:
-                                linear_x = 0.05
-                            else:
-                                linear_x = 0.06
+                     if distance_to_goal_x > 0:
+                        if distance_to_goal_x < 0.1:
+                            linear_x = 0.06
                         else:
-                            if distance_to_goal_x > -0.1:
-                                linear_x = -0.05
-                            else:
-                                linear_x = -0.06
+                            linear_x = 0.08
+                     else:
+                        if distance_to_goal_x > -0.1:
+                            linear_x = -0.06
+                        else:
+                            linear_x = -0.08
 
                 linear_y = 0.0
                 angular_z = 0.0
@@ -217,6 +224,9 @@ class TransformListenerNode(Node):
                     self.get_logger().info(f"Robot has reached goal at Point {'A' if self.current_goal_index == 0 else 'B' if self.current_goal_index == 1 else 'C'}.")
                     if self.current_goal_index == 0:  # If at Point A again
                         self.send_command(0.0, 0.0, 0.0)  # Send stop command
+              
+        			
+        			
                     self.current_goal_index += 1  # Move to the next goal
                     if self.current_goal_index < len(self.goals):
                         next_goal = self.goals[self.current_goal_index]
@@ -235,31 +245,15 @@ class TransformListenerNode(Node):
             else:
                 # Move towards the goal in y direction
                 if distance_to_goal_y > 0:
-                    if self.distances['left']['static'] < 0.15:
-                        self.get_logger().info("Obstacle detected on the left! Stopping the robot.")
-                        linear_y = 0.0
-                        linear_x = 0.0
-                        angular_z = 0.0
-                        self.send_command(linear_x, linear_y, angular_z)  # Send stop command
-                        return  # Exit the function to prevent further movement
-                    else:
                         if distance_to_goal_y < 0.1:
-                            linear_y = 0.04
+                            linear_y = 0.06
                         else:
-                            linear_y = 0.07 
+                            linear_y = 0.08
                 else:
-                    if self.distances['right']['static'] < 0.15:
-                        self.get_logger().info("Obstacle detected on the left! Stopping the robot.")
-                        linear_y = 0.0
-                        linear_x = 0.0
-                        angular_z = 0.0
-                        self.send_command(linear_x, linear_y, angular_z)  # Send stop command
-                        return  # Exit the function to prevent further movement
-                    else :
                         if distance_to_goal_y > -0.1:
-                            linear_y = -0.04
+                            linear_y = -0.06
                         else:
-                            linear_y = -0.07
+                            linear_y = -0.08
                 linear_x = 0.0
                 angular_z = 0.0
 
@@ -320,6 +314,8 @@ class TransformListenerNode(Node):
 
     def quaternion_to_yaw(self, quaternion):
         """Convert quaternion to yaw angle."""
+        quaternion.x =0.0
+        quaternion.y =0.0
         x = quaternion.x
         y = quaternion.y
         z = quaternion.z
