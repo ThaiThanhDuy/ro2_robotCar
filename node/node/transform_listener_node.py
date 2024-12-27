@@ -26,7 +26,7 @@ class TransformListenerNode(Node):
         # Goal parameters (x, y, yaw)
         self.goal = (0.0, 0.0, 0.0)  # Initialize goal (x, y, yaw)
         self.state = 'ALIGN_YAW'  # Initial state
-        self.obstacle = 'YES'
+
         # Define the sequence of goals
         self.goals = [
             (0.0, 0.0, 0.0),  # Point A
@@ -57,39 +57,37 @@ class TransformListenerNode(Node):
         # Flag to indicate if obstacles were detected
         self.obstacles_detected = False
         self.obstacle_threshold = 0.5  # Threshold for obstacle detection
-
     def scan_callback(self, msg):
-
-
-     
         # Get the number of ranges
         num_ranges = len(msg.ranges)
 
         # Define the angles for each direction
         directions = {
             'front': num_ranges // 2,                # 0 degrees
-            'back': 0,                                # 180 degrees
-            'left': (3 * num_ranges) // 4,           # 90 degrees
-            'right': num_ranges // 4,                 # 270 degrees
-            'Northeast': num_ranges // 8,             # 45 degrees
-            'Southwest': 5 * num_ranges // 8,        # 225 degrees
-            'Northwest': 3 * num_ranges // 8,        # 135 degrees
-            'Southeast': 7 * num_ranges // 8         # 315 degrees
+            'back': 0,   # 180 degrees
+            'left': (3 * num_ranges) // 4,   # 90 degrees
+            'right': num_ranges // 4 , # 270 degrees
+            'Northeast': num_ranges // 8,                # 45 degrees
+            'Southwest': 5 * num_ranges // 8,             # 225 degrees
+            'Northwest': 3 * num_ranges // 8,             # 135 degrees
+            'Southeast': 7 * num_ranges // 8             # 315 degrees
         }
-
-
 
         # Calculate distances for each direction
         for direction, index in directions.items():
             distance = msg.ranges[index]
             if distance < 1.0:  # Check if the distance is less than 1 meter
+                # Here, we would need additional logic to classify the obstacle
+                # For demonstration, we will assume all detected obstacles are static
                 self.distances[direction]['static'] = min(self.distances[direction]['static'], distance)
                 self.obstacles_detected = True  # Set flag to indicate obstacles are detected
             else:
-                self.distances[direction]['static'] = float('inf')  # Reset if no obstacle is detected
+                # Reset the distance if no obstacle is detected
+                self.distances[direction]['static'] = float('inf')
+
+
 
 	
-
     def set_goal(self, x, y, yaw):
         """Set the goal position and orientation."""
         self.goal = (x, y, yaw)
@@ -98,18 +96,18 @@ class TransformListenerNode(Node):
     def timer_callback(self):
         try:
             # Get the transformation from 'odom' to 'base_link'
-            trans = self.tf_buffer.lookup_transform('odom', 'base_link', rclpy.time.Time())
+            trans = self.tf_buffer.lookup_transform('base_link', 'odom', rclpy.time.Time())
             self.process_transform(trans)
         except Exception as e:
             self.get_logger().info(f'Could not get transform: {e}')
 
     def process_transform(self, trans: TransformStamped):
         # Extract translation
-        x = trans.transform.translation.x
-        y = trans.transform.translation.y
+        x = -trans.transform.translation.x
+        y = -trans.transform.translation.y
         
         # Convert quaternion to yaw
-        yaw = self.quaternion_to_yaw(trans.transform.rotation)
+        yaw = -self.quaternion_to_yaw(trans.transform.rotation)
 
         # Log the current position
         self.get_logger().info(f'Current Position: x={x}, y={y}, Yaw={yaw}')
@@ -119,12 +117,10 @@ class TransformListenerNode(Node):
 
     def control_robot(self, current_x, current_y, current_yaw):
         goal_x, goal_y, goal_yaw = self.goal
-        linear_x = 0.0
-        linear_y = 0.0
-        angular_z = 0.0
+
         # Define thresholds
-        threshold = 0.2  # Threshold for x and y
-        yaw_threshold = 0.1  # Threshold for yaw
+        threshold = 0.15  # Threshold for x and y
+        yaw_threshold = 0.2  # Threshold for yaw
 
         if self.state == 'ALIGN_YAW':
             # Calculate the desired yaw angle based on the goal yaw
@@ -153,54 +149,14 @@ class TransformListenerNode(Node):
         elif self.state == 'MOVE_X':
             time.sleep(1.5)
              # Check for obstacles in front
-             # Check for obstacles in front
-            if self.distances['front']['static'] < 1.0:
-                if self.distances['left']['static'] < 1.0:
-                    while(self.obstacle=='YES'):
-
-                        self.get_logger().info("Obstacle detected in left!")
-                        linear_x = 0.0
-                        linear_y = -0.1
-                        angular_z = 0.0
-                        self.send_command(linear_x, linear_y, angular_z)  # Send stop command
-                        if self.distances['front']['static'] > 1.0 and self.distances['Northeast']['static'] > 1.0:
-                            self.get_logger().info("NO Obstacle F and NE detected !")
-                            self.obstacle='NO'
-                        rclpy.spin_once(self, timeout_sec=0.1)
-                     
-		
-                  
-                if self.distances['right']['static'] < 1.5:
-                    while(self.obstacle=='Yes'):
-
-                        self.get_logger().info("Obstacle detected in font and right!")
-                        linear_x = 0.0
-                        linear_y = 0.1
-                        angular_z = 0.0
-                        self.send_command(linear_x, linear_y, angular_z)  # Send stop command
-                        if self.distances['front']['static'] > 1.0 and self.distances['Northwest']['static'] > 1.0:
-                            self.get_logger().info("NO Obstacle F and NW detected !")
-                            self.obstacle='NO'
-                        rclpy.spin_once(self, timeout_sec=0.1)
-                    
-
-                    
-                    
-                if self.distances['left']['static'] < 1.0 and self.distances['right']['static'] < 1.0:
-                    while(self.obstacle=='Yes'):
-                        self.get_logger().info("Obstacle detected in robot! Stopping the robot.")
-                        linear_x = 0.0
-                        linear_y = 0.0
-                        angular_z = 0.0
-                        self.send_command(linear_x, linear_y, angular_z)  # Send stop command
-                        if self.distances['left']['static'] > 1.0 or self.distances['right']['static'] > 1.0:
-                            self.get_logger().info("NO Obstacle L and R detected !")
-                            self.obstacle='NO'
-                        rclpy.spin_once(self, timeout_sec=0.1)
-                        
-                    
-               
-            else:	
+            if self.distances['front']['static'] < 0.5:
+                self.get_logger().info("Obstacle detected in front! Stopping the robot.")
+                linear_x = 0.0
+                linear_y = 0.0
+                angular_z = 0.0
+                self.send_command(linear_x, linear_y, angular_z)  # Send stop command
+                return  # Exit the function to prevent further movement
+            else:
                 distance_to_goal_x = goal_x - current_x
                 if abs(distance_to_goal_x) < threshold:
         # Stop if within threshold for x
@@ -210,14 +166,14 @@ class TransformListenerNode(Node):
         # Move towards the goal in x direction
                      if distance_to_goal_x > 0:
                         if distance_to_goal_x < 0.1:
-                            linear_x = 0.06
+                            linear_x = 0.05
                         else:
-                            linear_x = 0.08
+                            linear_x = 0.06
                      else:
                         if distance_to_goal_x > -0.1:
-                            linear_x = -0.06
+                            linear_x = -0.05
                         else:
-                            linear_x = -0.08
+                            linear_x = -0.06
 
                 linear_y = 0.0
                 angular_z = 0.0
@@ -244,9 +200,6 @@ class TransformListenerNode(Node):
                     self.get_logger().info(f"Robot has reached goal at Point {'A' if self.current_goal_index == 0 else 'B' if self.current_goal_index == 1 else 'C'}.")
                     if self.current_goal_index == 0:  # If at Point A again
                         self.send_command(0.0, 0.0, 0.0)  # Send stop command
-              
-        			
-        			
                     self.current_goal_index += 1  # Move to the next goal
                     if self.current_goal_index < len(self.goals):
                         next_goal = self.goals[self.current_goal_index]
@@ -265,15 +218,31 @@ class TransformListenerNode(Node):
             else:
                 # Move towards the goal in y direction
                 if distance_to_goal_y > 0:
+                    if self.distances['left']['static'] < 0.15:
+                        self.get_logger().info("Obstacle detected on the left! Stopping the robot.")
+                        linear_y = 0.0
+                        linear_x = 0.0
+                        angular_z = 0.0
+                        self.send_command(linear_x, linear_y, angular_z)  # Send stop command
+                        return  # Exit the function to prevent further movement
+                    else:
                         if distance_to_goal_y < 0.1:
-                            linear_y = 0.06
+                            linear_y = 0.04
                         else:
-                            linear_y = 0.08
+                            linear_y = 0.07 
                 else:
+                    if self.distances['right']['static'] < 0.15:
+                        self.get_logger().info("Obstacle detected on the right! Stopping the robot.")
+                        linear_y = 0.0
+                        linear_x = 0.0
+                        angular_z = 0.0
+                        self.send_command(linear_x, linear_y, angular_z)  # Send stop command
+                        return  # Exit the function to prevent further movement
+                    else :
                         if distance_to_goal_y > -0.1:
-                            linear_y = -0.06
+                            linear_y = -0.04
                         else:
-                            linear_y = -0.08
+                            linear_y = -0.07
                 linear_x = 0.0
                 angular_z = 0.0
 
@@ -334,8 +303,6 @@ class TransformListenerNode(Node):
 
     def quaternion_to_yaw(self, quaternion):
         """Convert quaternion to yaw angle."""
-        quaternion.x =0.0
-        quaternion.y =0.0
         x = quaternion.x
         y = quaternion.y
         z = quaternion.z
