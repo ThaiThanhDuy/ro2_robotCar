@@ -17,7 +17,8 @@ class TransformListenerNode(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         # Initialize serial port (replace with your actual port)
-        self.serial_port = serial.Serial('/dev/ttyUSB1', 115200, timeout=1)  # Adjust as necessary
+        self.character_port = serial.Serial('/dev/ttyUSB1', 115200, timeout=1)  # For sending characters
+        self.serial_port = serial.Serial('/dev/ttyUSB2', 115200, timeout=1)  # Adjust as necessary
         self.command_in_progress = False
 
         # Timer to periodically get the transformation
@@ -200,15 +201,29 @@ class TransformListenerNode(Node):
                     self.get_logger().info(f"Robot has reached goal at Point {'A' if self.current_goal_index == 0 else 'B' if self.current_goal_index == 1 else 'C'}.")
                     if self.current_goal_index == 0:  # If at Point A again
                         self.send_command(0.0, 0.0, 0.0)  # Send stop command
-                    self.current_goal_index += 1  # Move to the next goal
+                        self.send_character('A')  # Send 'A' to the character port
+                        self.current_goal_index += 1  # Move to the next goal
+                        
                     if self.current_goal_index < len(self.goals):
                         next_goal = self.goals[self.current_goal_index]
                         self.set_goal(*next_goal)  # Set the next goal
                         if self.current_goal_index == 1:  # Point B
-                            time.sleep(5)  # Wait for 5 seconds at Point B
+                            time.sleep(1)  # Wait for 5 seconds at Point B
+                            self.get_logger().info("Reached goal B. Sending 'B'...")
+                            self.send_character('B')  # Send 'B' to the character port
+                            self.wait_for_response('N')  # Wait for 'N'
+                            self.get_logger().info("Received 'N', proceeding to Point C.")
+                            self.current_goal_index += 1  # Move to the next goal
+
                         if self.current_goal_index == 2:  # Point C
-                            time.sleep(3)  # Wait for 3 seconds at Point C
+                            time.sleep(1)  # Wait for 3 seconds at Point C
+                            self.get_logger().info("Reached goal C. Sending 'C'...")
+                            self.send_character('C')  # Send 'C' to the character port
+                            self.wait_for_response('M')  # Wait for 'M'
+                            self.get_logger().info("Received 'M', proceeding to Point A.")
+                            self.current_goal_index += 1  # Move to the next goal
                     else:
+                        self.send_character('A')  # Send 'A' to the character port
                         self.get_logger().info("All goals reached. Returning to Point A.")
                         self.set_goal(0.0, 0.0, 0.0)  # Return to Point A
                 else:
@@ -232,7 +247,7 @@ class TransformListenerNode(Node):
                             linear_y = 0.07 
                 else:
                     if self.distances['right']['static'] < 0.15:
-                        self.get_logger().info("Obstacle detected on the left! Stopping the robot.")
+                        self.get_logger().info("Obstacle detected on the right! Stopping the robot.")
                         linear_y = 0.0
                         linear_x = 0.0
                         angular_z = 0.0
@@ -300,6 +315,23 @@ class TransformListenerNode(Node):
             self.get_logger().error("Invalid input. Please enter numeric values.")
         finally:
             self.command_in_progress = False  # Reset the state variable
+    def send_character(self, character):
+        """Send a character to the character serial port."""
+        self.character_port.write(character.encode('utf-8'))
+        self.get_logger().info(f"Character sent: {character.strip()}")
+
+    def wait_for_response(self, expected_response):
+        """Wait for a specific response from the character serial port."""
+        self.get_logger().info(f"Waiting for response '{expected_response}'...")
+        while True:
+            if self.character_port.in_waiting > 0:
+                response = self.character_port.read_until(b'\n').decode('utf-8').strip()
+                self.get_logger().info(f"Received response: {response}")
+                if response == expected_response:
+                    self.get_logger().info(f"Received '{expected_response}', proceeding with the next steps.")
+                    break
+                else:
+                    self.get_logger().warn(f"Unexpected response: {response}. Waiting for '{expected_response}'...")
 
     def quaternion_to_yaw(self, quaternion):
         """Convert quaternion to yaw angle."""
