@@ -59,34 +59,43 @@ class TransformListenerNode(Node):
         self.obstacle_threshold = 0.5  # Threshold for obstacle detection
 
 	self.last_scan_time = self.get_clock().now()  # Initialize last scan time
-    def scan_callback(self, msg):
+  def scan_callback(self, msg):
+        current_time = self.get_clock().now()
+        time_since_last_scan = (current_time - self.last_scan_time).nanoseconds / 1e9  # Convert to seconds
+
+        # Only process the scan if 0.1 seconds have passed
+        if time_since_last_scan < 0.1:
+            return  # Skip processing if not enough time has passed
+
+        # Update the last scan time
+        self.last_scan_time = current_time
+
         # Get the number of ranges
         num_ranges = len(msg.ranges)
 
         # Define the angles for each direction
         directions = {
             'front': num_ranges // 2,                # 0 degrees
-            'back': 0,   # 180 degrees
-            'left': (3 * num_ranges) // 4,   # 90 degrees
-            'right': num_ranges // 4 , # 270 degrees
-            'Northeast': num_ranges // 8,                # 45 degrees
-            'Southwest': 5 * num_ranges // 8,             # 225 degrees
-            'Northwest': 3 * num_ranges // 8,             # 135 degrees
-            'Southeast': 7 * num_ranges // 8             # 315 degrees
+            'back': 0,                                # 180 degrees
+            'left': (3 * num_ranges) // 4,           # 90 degrees
+            'right': num_ranges // 4,                 # 270 degrees
+            'Northeast': num_ranges // 8,             # 45 degrees
+            'Southwest': 5 * num_ranges // 8,        # 225 degrees
+            'Northwest': 3 * num_ranges // 8,        # 135 degrees
+            'Southeast': 7 * num_ranges // 8         # 315 degrees
         }
+
+
 
         # Calculate distances for each direction
         for direction, index in directions.items():
-		
             distance = msg.ranges[index]
             if distance < 1.0:  # Check if the distance is less than 1 meter
-                # Here, we would need additional logic to classify the obstacle
-                # For demonstration, we will assume all detected obstacles are static
                 self.distances[direction]['static'] = min(self.distances[direction]['static'], distance)
                 self.obstacles_detected = True  # Set flag to indicate obstacles are detected
             else:
-                # Reset the distance if no obstacle is detected
-                self.distances[direction]['static'] = max(self.distances[direction]['static'], distance)
+                self.distances[direction]['static'] = float('inf')  # Reset if no obstacle is detected
+
 	
 
     def set_goal(self, x, y, yaw):
