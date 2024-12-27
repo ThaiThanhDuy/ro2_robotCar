@@ -166,7 +166,8 @@ class TransformListenerNode(Node):
                         if self.distances['front']['static'] > 1.0 and self.distances['Northeast']['static'] > 1.0:
                             self.get_logger().info("NO Obstacle F and NE detected !")
                             self.obstacle='NO'
-                        return
+                        rclpy.spin_once(self, timeout_sec=0.1)
+                     
 		
                   
                 if self.distances['right']['static'] < 1.5:
@@ -180,7 +181,8 @@ class TransformListenerNode(Node):
                         if self.distances['front']['static'] > 1.0 and self.distances['Northwest']['static'] > 1.0:
                             self.get_logger().info("NO Obstacle F and NW detected !")
                             self.obstacle='NO'
-                        return
+                        rclpy.spin_once(self, timeout_sec=0.1)
+                    
 
                     
                     
@@ -194,7 +196,8 @@ class TransformListenerNode(Node):
                         if self.distances['left']['static'] > 1.0 or self.distances['right']['static'] > 1.0:
                             self.get_logger().info("NO Obstacle L and R detected !")
                             self.obstacle='NO'
-                        return
+                        rclpy.spin_once(self, timeout_sec=0.1)
+                        
                     
                
             else:	
