@@ -48,9 +48,7 @@ class JointStatePublisher(Node):
         
         # Start a thread to read UART data
         self.reading_thread = threading.Thread(target=self.read_uart, daemon=True)
-        self.reading_thread_yaw = threading.Thread(target=self.read_uart_yaw, daemon=True)
         self.reading_thread.start()
-        self.reading_thread_yaw.start()
 
         # Smoothing parameters
         self.alpha = 0.5  # Smoothing factor (0 < alpha < 1)
@@ -85,21 +83,21 @@ class JointStatePublisher(Node):
         self.publish_transform()
 
         self.get_logger().info(f'Publishing: Position: {self.joint_state_msg.position}, Velocity: {self.joint_state_msg.velocity}, Base Link Position: ({self.base_link_x}, {self.base_link_y}, {self.base_link_z}), Orientation: {self.orientation}')
-        self.get_logger().info(f'Publishing: XYZ: {self.linear_x}, {self.linear_y}, {self.angular_z}')
+        self.get_logger().info(f 'Publishing: XYZ: {self.linear_x}, {self.linear_y}, {self.angular_z}')
 
     def read_uart(self):
         while rclpy.ok():
             if self.serial_port.in_waiting > 0:
-                data = self.serial_port.readline().decode ('utf-8').strip()
+                data = self.serial_port.readline().decode('utf-8').strip()
                 self.get_logger().info(f"Received data: {data}")  # Log the received data
-                yaw_data = self.serial_yaw.readline().decode('utf-8').strip()
-                self.get_logger().info(f"Received yaw data: {yaw_data}")  # Log the received yaw data
+                if self.serial_yaw.in_waiting > 0:
+                    yaw_data = self.serial_yaw.readline().decode('utf-8').strip()
+                    self.get_logger().info(f"Received yaw data: {yaw_data}")  # Log the received yaw data
 
-                with self.lock:
-                    self.data_buffer.append(data)
-                    self.yaw_buffer.append(yaw_data)
-  
-                    
+                    with self.lock:
+                        self.data_buffer.append(data)
+                        self.yaw_buffer.append(yaw_data)
+
     def process_yaw_data(self, yaw_data):
         try:
             yaw = float(yaw_data.split(':')[1])  # Assuming the format is 'yaw:<value>'
@@ -110,6 +108,7 @@ class JointStatePublisher(Node):
 
         except ValueError as e:
             self.get_logger().error(f"Error parsing yaw data: {e}")
+
     def process_uart_data(self, data):
         # Example expected data format: "pos1:1.0 vel1:0.5 pos2:-1.0 vel2:0.3 pos3:0.0 vel3:0.0 pos4:0.0 vel4:0.0"
         try:
@@ -184,22 +183,6 @@ class JointStatePublisher(Node):
         
         # Send the transform
         self.transform_broadcaster.sendTransform(t)
-
-        # Create a TransformStamped message for map to odom
-        #t_map = TransformStamped()
-        #t_map.header.stamp = self.get_clock().now().to_msg()
-       # t_map.header.frame_id = 'map'  # Parent frame
-        #t_map.child_frame_id = 'odom'  # Child frame
-        #t_map.transform.translation.x = 0.0  # Set this based on your mapping logic
-        #t_map.transform.translation.y = 0.0  # Set this based on your mapping logic
-        #t_map.transform.translation.z = 0.0  # Assuming constant height for simplicity
-        #t_map.transform.rotation.x = 0.0
-        #t_map.transform.rotation.y = 0.0
-        #t_map.transform.rotation.z = 0.0
-        #t_map.transform.rotation.w = 1.0  # No rotation for the map frame
-
-        # Send the map to odom transform
-        #self.transform_broadcaster.sendTransform(t_map)
 
     def euler_to_quaternion(self, roll, pitch, yaw):
         # Convert Euler angles to quaternion
