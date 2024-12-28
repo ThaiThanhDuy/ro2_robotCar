@@ -83,7 +83,7 @@ class JointStatePublisher(Node):
         self.publish_transform()
 
         self.get_logger().info(f'Publishing: Position: {self.joint_state_msg.position}, Velocity: {self.joint_state_msg.velocity}, Base Link Position: ({self.base_link_x}, {self.base_link_y}, {self.base_link_z}), Orientation: {self.orientation}')
-        self.get_logger().info(f 'Publishing: XYZ: {self.linear_x}, {self.linear_y}, {self.angular_z}')
+      #  self.get_logger().info(f 'Publishing: XYZ: {self.linear_x}, {self.linear_y}, {self.angular_z}')
 
     def read_uart(self):
         while rclpy.ok():
