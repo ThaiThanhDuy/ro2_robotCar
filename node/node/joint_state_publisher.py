@@ -7,7 +7,7 @@ import math
 import serial  # Make sure to install pyserial if you haven't already
 from collections import deque
 import threading
-import time
+
 class JointStatePublisher(Node):
     def __init__(self):
         super().__init__('joint_state_publisher')
@@ -38,22 +38,21 @@ class JointStatePublisher(Node):
         self.track_width = 0.3  # Distance between front and rear wheels (in meters)
         self.wheel_radius = 0.0485  # Radius of the wheels (in meters)
 
-        # Initialize UART for position/velocity and yaw
-        self.serial_pos_vel = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)  # For position and velocity
+        # Initialize UART
+        self.serial_port = serial.Serial('/dev/ttyUSB1', 115200, timeout=1)  # Adjust the port and baud rate as needed
         self.serial_yaw = serial.Serial('/dev/ttyUSB3', 115200, timeout=1)      # For yaw
-        
-        # Buffers for incoming data
-        self.data_buffer = deque(maxlen=10)  # For position and velocity
+        # Buffer for incoming data
+        self.data_buffer = deque(maxlen=10)  # Adjust the size as needed
         self.yaw_buffer = deque(maxlen=10)    # For yaw
         self.lock = threading.Lock()
         
-        # Start threads to read UART data
-        self.reading_thread_pos_vel = threading.Thread(target=self.read_uart_pos_vel, daemon=True)
+        # Start a thread to read UART data
+        self.reading_thread = threading.Thread(target=self.read_uart, daemon=True)
         self.reading_thread_yaw = threading.Thread(target=self.read_uart_yaw, daemon=True)
-        self.reading_thread_pos_vel.start()
+        self.reading_thread.start()
         self.reading_thread_yaw.start()
 
-        # Smoothing parameters                
+        # Smoothing parameters
         self.alpha = 0.5  # Smoothing factor (0 < alpha < 1)
         self.prev_position = [0.0, 0.0, 0.0, 0.0]
         self.prev_velocity = [0.0, 0.0, 0.0, 0.0]
@@ -66,7 +65,6 @@ class JointStatePublisher(Node):
             if self.data_buffer:
                 data = self.data_buffer.popleft()
                 self.process_uart_data(data)
-
             if self.yaw_buffer:
                 yaw_data = self.yaw_buffer.popleft()
                 self.process_yaw_data(yaw_data)
@@ -82,30 +80,38 @@ class JointStatePublisher(Node):
 
             # Update base_link position and orientation
             self.update_base_link_position(self.linear_x, self.linear_y, self.angular_z)
-        self.get_logger().info(f'Publishing: Position: {self.joint_state_msg.position}, Velocity: {self.joint_state_msg.velocity}, Base Link Position: ({self.base_link_x}, {self.base_link_y}, {self.base_link_z}), Orientation: {self.orientation}')
-        self.get_logger().info(f'Publishing: XYZ: {self.linear_x}, {self.linear_y}, {self.angular_z}')
+
         # Create and publish the transform
         self.publish_transform()
 
-    def read_uart_pos_vel(self):
+        self.get_logger().info(f'Publishing: Position: {self.joint_state_msg.position}, Velocity: {self.joint_state_msg.velocity}, Base Link Position: ({self.base_link_x}, {self.base_link_y}, {self.base_link_z}), Orientation: {self.orientation}')
+        self.get_logger().info(f'Publishing: XYZ: {self.linear_x}, {self.linear_y}, {self.angular_z}')
+
+    def read_uart(self):
         while rclpy.ok():
-            if self.serial_pos_vel.in_waiting > 0:
-                data = self.serial_pos_vel.readline().decode ('utf-8').strip()
+            if self.serial_port.in_waiting > 0:
+                data = self.serial_port.readline().decode ('utf-8').strip()
                 self.get_logger().info(f"Received data: {data}")  # Log the received data
-
-                with self.lock:
-                    self.data_buffer.append(data)
-
-    def read_uart_yaw(self):
-        while rclpy.ok():
-            if self.serial_yaw.in_waiting > 0:
                 yaw_data = self.serial_yaw.readline().decode('utf-8').strip()
                 self.get_logger().info(f"Received yaw data: {yaw_data}")  # Log the received yaw data
 
                 with self.lock:
+                    self.data_buffer.append(data)
                     self.yaw_buffer.append(yaw_data)
+  
+                    
+    def process_yaw_data(self, yaw_data):
+        try:
+            yaw = float(yaw_data.split(':')[1])  # Assuming the format is 'yaw:<value>'
+            yaw_radians = (yaw % 360) * (math.pi / 180)
 
+            # Update orientation
+            self.orientation = yaw_radians
+
+        except ValueError as e:
+            self.get_logger().error(f"Error parsing yaw data: {e}")
     def process_uart_data(self, data):
+        # Example expected data format: "pos1:1.0 vel1:0.5 pos2:-1.0 vel2:0.3 pos3:0.0 vel3:0.0 pos4:0.0 vel4:0.0"
         try:
             # Split the data by spaces
             parts = data.split()
@@ -150,44 +156,55 @@ class JointStatePublisher(Node):
         except ValueError as e:
             self.get_logger().error(f"Error parsing data: {e}")
 
-    def process_yaw_data(self, yaw_data):
-        try:
-            yaw = float(yaw_data.split(':')[1])  # Assuming the format is 'yaw:<value>'
-            yaw_radians = (yaw % 360) * (math.pi / 180)
-
-            # Update orientation
-            self.orientation = yaw_radians
-
-        except ValueError as e:
-            self.get_logger().error(f"Error parsing yaw data: {e}")
-
     def update_base_link_position(self, linear_x, linear_y, angular_z):
-        dt = 0.01  # Time step based on the timer interval
-
+        # Update base_link position based on the desired linear and angular velocities
+        dt = 0.001  # Time step
+        
         self.base_link_x += (linear_x * math.cos(self.orientation) - linear_y * math.sin(self.orientation)) * dt
         self.base_link_y += (linear_x * math.sin(self.orientation) + linear_y * math.cos(self.orientation)) * dt
-        self.base_link_z = 0.0  # Assuming constant height
-
+        # Assuming constant height for simplicity
+        self.base_link_z = 0.0
+      
     def publish_transform(self):
+        # Create a TransformStamped message for odom to base_link
         t = TransformStamped()
         t.header.stamp = self.get_clock().now().to_msg()
-        t.header.frame_id = 'odom'
-        t.child_frame_id = 'base_link'
-        t.transform.translation.x = self.base_link_x
-        t.transform.translation.y = self.base_link_y
-        t.transform.translation.z = self.base_link_z
-
+        t.header.frame_id = 'odom'  # Parent frame
+        t.child_frame_id = 'base_link'  # Child frame
+        t.transform.translation.x = self.base_link_x 
+        t.transform.translation.y = self.base_link_y 
+        t.transform.translation.z = self.base_link_z 
+        
+        # Set rotation based on the current orientation
         quaternion = self.euler_to_quaternion(0.0, 0.0, self.orientation)
         t.transform.rotation.x = quaternion[0]
         t.transform.rotation.y = quaternion[1]
         t.transform.rotation.z = quaternion[2]
         t.transform.rotation.w = quaternion[3]
-
+        
+        # Send the transform
         self.transform_broadcaster.sendTransform(t)
 
+        # Create a TransformStamped message for map to odom
+        #t_map = TransformStamped()
+        #t_map.header.stamp = self.get_clock().now().to_msg()
+       # t_map.header.frame_id = 'map'  # Parent frame
+        #t_map.child_frame_id = 'odom'  # Child frame
+        #t_map.transform.translation.x = 0.0  # Set this based on your mapping logic
+        #t_map.transform.translation.y = 0.0  # Set this based on your mapping logic
+        #t_map.transform.translation.z = 0.0  # Assuming constant height for simplicity
+        #t_map.transform.rotation.x = 0.0
+        #t_map.transform.rotation.y = 0.0
+        #t_map.transform.rotation.z = 0.0
+        #t_map.transform.rotation.w = 1.0  # No rotation for the map frame
+
+        # Send the map to odom transform
+        #self.transform_broadcaster.sendTransform(t_map)
+
     def euler_to_quaternion(self, roll, pitch, yaw):
+        # Convert Euler angles to quaternion
         qx = math.sin(roll / 2) * math.cos(pitch / 2) * math.cos(yaw / 2) - math.cos(roll / 2) * math.sin(pitch / 2) * math.sin(yaw / 2)
-        qy = math.cos(roll / 2 ) * math.sin(pitch / 2) * math.cos(yaw / 2) + math.sin(roll / 2) * math.cos(pitch / 2) * math.sin(yaw / 2)
+        qy = math.cos(roll / 2) * math.sin(pitch / 2) * math.cos(yaw / 2) + math.sin(roll / 2) * math.cos(pitch / 2) * math.sin(yaw / 2)
         qz = math.cos(roll / 2) * math.cos(pitch / 2) * math.sin(yaw / 2) - math.sin(roll / 2) * math.sin(pitch / 2) * math.cos(yaw / 2)
         qw = math.cos(roll / 2) * math.cos(pitch / 2) * math.cos(yaw / 2) + math.sin(roll / 2) * math.sin(pitch / 2) * math.sin(yaw / 2)
         return [qx, qy, qz, qw]
