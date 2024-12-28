@@ -108,59 +108,46 @@ class JointStatePublisher(Node):
     def process_uart_data(self, data):
        # Example expected data format: "pos1:1.0 vel1:0.5 pos2:-1.0 vel2:0.3 pos3:0.0 vel3:0.0 pos4:0.0 vel4:0.0"
         try:
-            # Split the data by spaces
-            parts = data.split()
-            pos = []
-            vel = []
+        # Split the data by spaces
+        parts = data.split()
+        pos = []
+        vel = []
 
-            # Extract position and velocity values
-            for part in parts:
-                if part.startswith('pos'):
-                    pos_value = float(part.split(':')[1])
-                    pos.append(pos_value)
-                elif part.startswith('vel'):
-                    vel_value = float(part.split(':')[1])
-                    vel.append(vel_value)
+        # Extract position and velocity values
+        for part in parts:
+            if part.startswith('pos'):
+                pos_value = float(part.split(':')[1])
+                pos.append(pos_value)
+            elif part.startswith('vel'):
+                vel_value = float(part.split(':')[1])
+                vel.append(vel_value)
 
-            # Update joint states if we have exactly 4 positions and 4 velocities
-            if len(pos) == 4 and len(vel) == 4:
-                # Apply exponential smoothing
-                self.joint_state_msg.position = [
-                    round(self.alpha * p + (1 - self.alpha) * pp, 2) for p, pp in zip(pos, self.prev_position)
-                ]
-                self.joint_state_msg.velocity = [
-                    round(self.alpha * v + (1 - self.alpha) * pv, 2) for v, pv in zip(vel, self.prev_velocity)
-                ]
-                self.joint_state_msg.header.stamp = self.get_clock().now().to_msg()  # Update timestamp
+        # Update joint states if we have exactly 4 positions and 4 velocities
+        if len(pos) == 4 and len(vel) == 4:
+            # Apply exponential smoothing
+            self.joint_state_msg.position = [
+                round(self.alpha * p + (1 - self.alpha) * pp, 2) for p, pp in zip(pos, self.prev_position)
+            ]
+            self.joint_state_msg.velocity = [
+                round(self.alpha * v + (1 - self.alpha) * pv, 2) for v, pv in zip(vel, self.prev_velocity)
+            ]
+            self.joint_state_msg.header.stamp = self.get_clock().now().to_msg()  # Update timestamp
 
-                # Update previous values for the next iteration
-                self.prev_position = self.joint_state_msg.position
-                self.prev_velocity = self.joint_state_msg.velocity
+            # Log the updated velocities
+            self.get_logger().info(f'Updated velocities: {self.joint_state_msg.velocity}')
 
+            # Update previous values for the next iteration
+            self.prev_position = self.joint_state_msg.position
+            self.prev_velocity = self.joint_state_msg.velocity
 
-                if(self.joint_state_msg.velocity[0]>=0 and self.joint_state_msg.velocity[0] <=0.04):
-                   self.joint_state_msg.velocity[0]=0.0
-                if(self.joint_state_msg.velocity[1]>=0 and self.joint_state_msg.velocity[1] <=0.04):
-                   self.joint_state_msg.velocity[1]=0.0
-                if(self.joint_state_msg.velocity[2]>=0 and self.joint_state_msg.velocity[2] <=0.04):
-                   self.joint_state_msg.velocity[2]=0.0
-                if(self.joint_state_msg.velocity[3]>=0 and self.joint_state_msg.velocity[3] <=0.04):
-                   self.joint_state_msg.velocity[3]=0.0
+            # Calculate linear and angular velocities
+            self.linear_x = (self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
+                             self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
+            self.linear_y = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
+                             self.joint_state_msg.velocity[2] - self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
 
-                if(self.joint_state_msg.velocity[0]<=0 and self.joint_state_msg.velocity[0] >= -0.04):
-                   self.joint_state_msg.velocity[0]=0.0
-                if(self.joint_state_msg.velocity[1]<=0 and self.joint_state_msg.velocity[1] >=-0.04):
-                   self.joint_state_msg.velocity[1]=0.0
-                if(self.joint_state_msg.velocity[2]<=0 and self.joint_state_msg.velocity[2] >=-0.04):
-                   self.joint_state_msg.velocity[2]=0.0
-                if(self.joint_state_msg.velocity[3]<=0 and self.joint_state_msg.velocity[3] >=-0.04):
-                   self.joint_state_msg.velocity[3]=0.0
-
-                # Calculate linear and angular velocities
-                self.linear_x = (self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
-                                 self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
-                self.linear_y = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
-                                 self.joint_state_msg.velocity[2] - self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
+            # Log the calculated linear velocities
+            self.get_logger().info(f'Calculated linear_x: {self.linear_x}, linear_y: {self.linear_y}')
                     
             else:
                 self.get_logger().error("Received data does not contain exactly 4 positions and 4 velocities.")
