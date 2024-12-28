@@ -7,7 +7,7 @@ import math
 import serial  # Make sure to install pyserial if you haven't already
 from collections import deque
 import threading
-
+import time
 class JointStatePublisher(Node):
     def __init__(self):
         super().__init__('joint_state_publisher')
@@ -38,18 +38,22 @@ class JointStatePublisher(Node):
         self.track_width = 0.3  # Distance between front and rear wheels (in meters)
         self.wheel_radius = 0.0485  # Radius of the wheels (in meters)
 
-        # Initialize UART
-        self.serial_port = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)  # Adjust the port and baud rate as needed
+        # Initialize UART for position/velocity and yaw
+        self.serial_pos_vel = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)  # For position and velocity
+        self.serial_yaw = serial.Serial('/dev/ttyUSB3', 115200, timeout=1)      # For yaw
         
-        # Buffer for incoming data
-        self.data_buffer = deque(maxlen=10)  # Adjust the size as needed
+        # Buffers for incoming data
+        self.data_buffer = deque(maxlen=10)  # For position and velocity
+        self.yaw_buffer = deque(maxlen=10)    # For yaw
         self.lock = threading.Lock()
         
-        # Start a thread to read UART data
-        self.reading_thread = threading.Thread(target=self.read_uart, daemon=True)
-        self.reading_thread.start()
+        # Start threads to read UART data
+        self.reading_thread_pos_vel = threading.Thread(target=self.read_uart_pos_vel, daemon=True)
+        self.reading_thread_yaw = threading.Thread(target=self.read_uart_yaw, daemon=True)
+        self.reading_thread_pos_vel.start()
+        self.reading_thread_yaw.start()
 
-        # Smoothing parameters
+        # Smoothing parameters                
         self.alpha = 0.5  # Smoothing factor (0 < alpha < 1)
         self.prev_position = [0.0, 0.0, 0.0, 0.0]
         self.prev_velocity = [0.0, 0.0, 0.0, 0.0]
@@ -63,6 +67,10 @@ class JointStatePublisher(Node):
                 data = self.data_buffer.popleft()
                 self.process_uart_data(data)
 
+            if self.yaw_buffer:
+                yaw_data = self.yaw_buffer.popleft()
+                self.process_yaw_data(yaw_data)
+
         # Publish the joint state message
         self.joint_state_msg.header.stamp = self.get_clock().now().to_msg()
         self.publisher_.publish(self.joint_state_msg)
@@ -74,28 +82,38 @@ class JointStatePublisher(Node):
 
             # Update base_link position and orientation
             self.update_base_link_position(self.linear_x, self.linear_y, self.angular_z)
-
+        self.get_logger().info(f'Publishing: Position: {self.joint_state_msg.position}, Velocity: {self.joint_state_msg.velocity}, Base Link Position: ({self.base_link_x}, {self.base_link_y}, {self.base_link_z}), Orientation: {self.orientation}')
+        self.get_logger().info(f'Publishing: XYZ: {self.linear_x}, {self.linear_y}, {self.angular_z}')
         # Create and publish the transform
         self.publish_transform()
-      #  self.get_logger().info(f'Position: {self.joint_state_msg.position}, Velocity: {self.joint_state_msg.velocity}')
-       # self.get_logger().info(f'Orientation: {self.orientation}, Linear Velocities: X: {self.linear_x}, Y: {self.linear_y}, Angular Z: {self.angular_z}')
 
-    def read_uart(self):
+    def read_uart_pos_vel(self):
         while rclpy.ok():
-            if self.serial_port.in_waiting > 0:
-                data = self.serial_port.readline().decode('utf-8').strip()
+            if self.serial_pos_vel.in_waiting > 0:
+                data = self.serial_pos_vel.readline().decode ('utf-8').strip()
                 self.get_logger().info(f"Received data: {data}")  # Log the received data
 
                 with self.lock:
                     self.data_buffer.append(data)
 
+    def read_uart_yaw(self):
+        while rclpy.ok():
+            if self.serial_yaw.in_waiting > 0:
+                yaw_data = self.serial_yaw.readline().decode('utf-8').strip()
+                self.get_logger().info(f"Received yaw data: {yaw_data}")  # Log the received yaw data
+
+                with self.lock:
+                    self.yaw_buffer.append(yaw_data)
+
     def process_uart_data(self, data):
+       # Example expected data format: "pos1:1.0 vel1:0.5 pos2:-1.0 vel2:0.3 pos3:0.0 vel3:0.0 pos4:0.0 vel4:0.0"
         try:
+            # Split the data by spaces
             parts = data.split()
             pos = []
             vel = []
-            yaw = 0.0  # Initialize yaw
 
+            # Extract position and velocity values
             for part in parts:
                 if part.startswith('pos'):
                     pos_value = float(part.split(':')[1])
@@ -103,23 +121,22 @@ class JointStatePublisher(Node):
                 elif part.startswith('vel'):
                     vel_value = float(part.split(':')[1])
                     vel.append(vel_value)
-                elif part.startswith('yaw'):
-                    yaw = float(part.split(':')[1])  # Yaw in degrees
 
-            # Normalize yaw to radians
-            yaw_radians = (yaw % 360) * (math.pi / 180)
-
+            # Update joint states if we have exactly 4 positions and 4 velocities
             if len(pos) == 4 and len(vel) == 4:
+                # Apply exponential smoothing
                 self.joint_state_msg.position = [
                     round(self.alpha * p + (1 - self.alpha) * pp, 2) for p, pp in zip(pos, self.prev_position)
                 ]
                 self.joint_state_msg.velocity = [
                     round(self.alpha * v + (1 - self.alpha) * pv, 2) for v, pv in zip(vel, self.prev_velocity)
                 ]
-                self.joint_state_msg.header.stamp = self.get_clock().now().to_msg()
+                self.joint_state_msg.header.stamp = self.get_clock().now().to_msg()  # Update timestamp
 
+                # Update previous values for the next iteration
                 self.prev_position = self.joint_state_msg.position
                 self.prev_velocity = self.joint_state_msg.velocity
+
 
                 if(self.joint_state_msg.velocity[0]>=0 and self.joint_state_msg.velocity[0] <=0.04):
                    self.joint_state_msg.velocity[0]=0.0
@@ -138,45 +155,36 @@ class JointStatePublisher(Node):
                    self.joint_state_msg.velocity[2]=0.0
                 if(self.joint_state_msg.velocity[3]<=0 and self.joint_state_msg.velocity[3] >=-0.04):
                    self.joint_state_msg.velocity[3]=0.0
-             
 
-                      # Calculate linear and angular velocities
+                # Calculate linear and angular velocities
                 self.linear_x = (self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
                                  self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
                 self.linear_y = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
                                  self.joint_state_msg.velocity[2] - self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
-                self.angular_z = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] -
-                                  self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * 0.1475)
-
-              
-
-                # Calculate the change in yaw
-                yaw_change = yaw_radians - self.orientation
-                if yaw_change > math.pi:
-                    yaw_change -= 2 * math.pi
-                elif yaw_change < -math.pi:
-                    yaw_change += 2 * math.pi
-            
-                # Clamp the yaw change
-                max_yaw_change = 0.1  # radians per update
-                if abs(yaw_change) > max_yaw_change:
-                    yaw_change = max_yaw_change * (1 if yaw_change > 0 else -1)
-
-                self.orientation += yaw_change
-
+                    
             else:
                 self.get_logger().error("Received data does not contain exactly 4 positions and 4 velocities.")
 
         except ValueError as e:
             self.get_logger().error(f"Error parsing data: {e}")
 
+    def process_yaw_data(self, yaw_data):
+        try:
+            yaw = float(yaw_data.split(':')[1])  # Assuming the format is 'yaw:<value>'
+            yaw_radians = (yaw % 360) * (math.pi / 180)
+
+            # Update orientation
+            self.orientation = yaw_radians
+
+        except ValueError as e:
+            self.get_logger().error(f"Error parsing yaw data: {e}")
+
     def update_base_link_position(self, linear_x, linear_y, angular_z):
-       dt = 0.01  # Time step based on the timer interval
+        dt = 0.01  # Time step based on the timer interval
 
-       self.base_link_x += (linear_x * math.cos(self.orientation) - linear_y * math.sin(self.orientation)) * dt
-       self.base_link_y += (linear_x * math.sin(self.orientation) + linear_y * math.cos(self.orientation)) * dt
-       self.base_link_z = 0.0  # Assuming constant height
-
+        self.base_link_x += (linear_x * math.cos(self.orientation) - linear_y * math.sin(self.orientation)) * dt
+        self.base_link_y += (linear_x * math.sin(self.orientation) + linear_y * math.cos(self.orientation)) * dt
+        self.base_link_z = 0.0  # Assuming constant height
 
     def publish_transform(self):
         t = TransformStamped()
@@ -195,10 +203,9 @@ class JointStatePublisher(Node):
 
         self.transform_broadcaster.sendTransform(t)
 
- 
     def euler_to_quaternion(self, roll, pitch, yaw):
         qx = math.sin(roll / 2) * math.cos(pitch / 2) * math.cos(yaw / 2) - math.cos(roll / 2) * math.sin(pitch / 2) * math.sin(yaw / 2)
-        qy = math.cos(roll / 2) * math.sin(pitch / 2) * math.cos(yaw / 2) + math.sin(roll / 2) * math.cos(pitch / 2) * math.sin(yaw / 2)
+        qy = math.cos(roll / 2 ) * math.sin(pitch / 2) * math.cos(yaw / 2) + math.sin(roll / 2) * math.cos(pitch / 2) * math.sin(yaw / 2)
         qz = math.cos(roll / 2) * math.cos(pitch / 2) * math.sin(yaw / 2) - math.sin(roll / 2) * math.sin(pitch / 2) * math.cos(yaw / 2)
         qw = math.cos(roll / 2) * math.cos(pitch / 2) * math.cos(yaw / 2) + math.sin(roll / 2) * math.sin(pitch / 2) * math.sin(yaw / 2)
         return [qx, qy, qz, qw]
