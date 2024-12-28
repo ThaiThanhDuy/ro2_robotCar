@@ -145,6 +145,8 @@ class JointStatePublisher(Node):
                              self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
             self.linear_y = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
                              self.joint_state_msg.velocity[2] - self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
+            self.angular_z = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] -
+                             self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * self.wheel_base)
 
             # Log the calculated linear velocities
             self.get_logger().info(f'Calculated linear_x: {self.linear_x}, linear_y: {self.linear_y}')
