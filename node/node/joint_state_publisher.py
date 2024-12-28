@@ -40,7 +40,7 @@ class JointStatePublisher(Node):
 
         # Initialize UART
         self.serial_port = serial.Serial('/dev/ttyUSB1', 115200, timeout=1)  # Adjust the port and baud rate as needed
-        self.serial_yaw = serial.Serial('/dev/ttyUSB3', 115200, timeout=1)      # For yaw
+        self.serial_yaw = serial.Serial('/dev/ttyUSB2', 115200, timeout=1)      # For yaw
         # Buffer for incoming data
         self.data_buffer = deque(maxlen=10)  # Adjust the size as needed
         self.yaw_buffer = deque(maxlen=10)    # For yaw
