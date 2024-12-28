@@ -140,14 +140,31 @@ class JointStatePublisher(Node):
                 # Update previous values for the next iteration
                 self.prev_position = self.joint_state_msg.position
                 self.prev_velocity = self.joint_state_msg.velocity
+                if(self.joint_state_msg.velocity[0]>=0 and self.joint_state_msg.velocity[0] <=0.02):
+                   self.joint_state_msg.velocity[0]=0.0
+                if(self.joint_state_msg.velocity[1]>=0 and self.joint_state_msg.velocity[1] <=0.02):
+                   self.joint_state_msg.velocity[1]=0.0
+                if(self.joint_state_msg.velocity[2]>=0 and self.joint_state_msg.velocity[2] <=0.02):
+                   self.joint_state_msg.velocity[2]=0.0
+                if(self.joint_state_msg.velocity[3]>=0 and self.joint_state_msg.velocity[3] <=0.02):
+                   self.joint_state_msg.velocity[3]=0.0
 
+                if(self.joint_state_msg.velocity[0]<=0 and self.joint_state_msg.velocity[0] >= -0.02):
+                   self.joint_state_msg.velocity[0]=0.0
+                if(self.joint_state_msg.velocity[1]<=0 and self.joint_state_msg.velocity[1] >=-0.02):
+                   self.joint_state_msg.velocity[1]=0.0
+                if(self.joint_state_msg.velocity[2]<=0 and self.joint_state_msg.velocity[2] >=-0.02):
+                   self.joint_state_msg.velocity[2]=0.0
+                if(self.joint_state_msg.velocity[3]<=0 and self.joint_state_msg.velocity[3] >=-0.02):
+                   self.joint_state_msg.velocity[3]=0.0
                 # Calculate linear and angular velocities
                 self.linear_x = (self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
                                  self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
                 self.linear_y = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] +
                                  self.joint_state_msg.velocity[2] - self.joint_state_msg.velocity[3]) / (4 * self.wheel_radius)
                 self.angular_z = (-self.joint_state_msg.velocity[0] + self.joint_state_msg.velocity[1] -
-                                  self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * self.wheel_base)
+                                  self.joint_state_msg.velocity[2] + self.joint_state_msg.velocity[3]) / (4 * 0.1475)
+                self.get_logger().info(f'Publishing: XYZ: {self.linear_x}, {self.linear_y}, {self.angular_z}')
 
             else:
                 self.get_logger().error("Received data does not contain exactly 4 positions and 4 velocities.")
