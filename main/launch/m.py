@@ -239,14 +239,20 @@ class TransformListenerNode(Node):
         self.get_logger().info(f"Sent character: {character}")
 
     def wait_for_response(self, expected_response):
-        """Wait for a specific response from the robot."""
+         """Wait for a specific response from the character serial port."""
+        self.get_logger().info(f"Waiting for response '{expected_response}'...")
         while True:
-            response = self.serial_port.readline().decode('utf-8').strip()
-            if response == expected_response:
-                self.get_logger().info(f"Received expected response: {response}")
-                break
-            else:
-                self.get_logger().info(f"Received unexpected response: {response}")
+            try:
+                with open("/home/pi4/code/uart_data.txt", "r") as file:
+                    response = file.read()
+                    if response == expected_response:
+                        self.get_logger().info(f"Received '{expected_response}', proceeding with the next steps.")
+                        break
+                    else:
+                        self.get_logger().warn(f"Unexpected response: {response}. Waiting for '{expected_response}'...")
+            except FileNotFoundError:
+                pass
+            time.sleep(0.1)
 
 def main(args=None):
     rclpy.init(args=args)
