@@ -6,6 +6,7 @@ import math
 import serial  # Ensure you have the pyserial package installed
 import time
 from sensor_msgs.msg import LaserScan
+import numpy as np
 
 class TransformListenerNode(Node):
     def __init__(self):
@@ -25,13 +26,14 @@ class TransformListenerNode(Node):
 
         # Goal parameters (x, y, yaw)
         self.goal = (0.0, 0.0, 0.0)  # Initialize goal (x, y, yaw)
-        self.state = 'WAIT_FOR_P'  # Initial state
+        self.state = 'ALIGN_YAW'  # Initial state
 
         # Define the sequence of goals
         self.goals = [
             (1.0, 0.0, 0.0),  # Point A
             (2.0, 0.0, 0.0),  # Point B
-            (0.0, 0.0, 0.0),  # Point C
+            (0.0, 0.0, 0.0),   # Point C
+          
         ]
         self.current_goal_index = 0  # Start with the first goal
         
@@ -41,8 +43,7 @@ class TransformListenerNode(Node):
             self.scan_callback,
             10
         )
-        
-        # Initialize distances dictionary
+          # Initialize distances dictionary
         self.distances = {
             'front': {'static': float('inf')},
             'back': {'static': float('inf')},
@@ -52,12 +53,13 @@ class TransformListenerNode(Node):
             'Southwest': {'static': float('inf')},
             'Northwest': {'static': float('inf')},
             'Southeast': {'static': float('inf')},
+            
         }
 	
         # Flag to indicate if obstacles were detected
         self.obstacles_detected = False
         self.obstacle_threshold = 0.5
-
+        self.auto = 0
     def scan_callback(self, msg):
         # Get the number of ranges
         num_ranges = len(msg.ranges)
@@ -78,11 +80,17 @@ class TransformListenerNode(Node):
         for direction, index in directions.items():
             distance = msg.ranges[index]
             if distance < 1.0:  # Check if the distance is less than 1 meter
+                # Here, we would need additional logic to classify the obstacle
+                # For demonstration, we will assume all detected obstacles are static
                 self.distances[direction]['static'] = min(self.distances[direction]['static'], distance)
                 self.obstacles_detected = True  # Set flag to indicate obstacles are detected
             else:
+                # Reset the distance if no obstacle is detected
                 self.distances[direction]['static'] = float('inf')
 
+
+
+	
     def set_goal(self, x, y, yaw):
         """Set the goal position and orientation."""
         self.goal = (x, y, yaw)
@@ -98,97 +106,149 @@ class TransformListenerNode(Node):
 
     def process_transform(self, trans: TransformStamped):
         # Extract translation
-        current_x = trans.transform.translation.x
-        current_y = trans.transform.translation.y
-        current_yaw = self.get_yaw_from_quaternion(trans.transform.rotation)
+        x = -trans.transform.translation.x
+        y = -trans.transform.translation.y
+        
+        # Convert quaternion to yaw
+        yaw = -self.quaternion_to_yaw(trans.transform.rotation)
 
-        # Control the robot based on the current state
-        self.control_robot(current_x, current_y, current_yaw)
+        # Log the current position
+        self.get_logger().info(f'Current Position: x={x}, y={y}, Yaw={yaw}')
 
-    def get_yaw_from_quaternion(self, quaternion):
-        """Convert quaternion to yaw angle."""
-        x = quaternion.x
-        y = quaternion.y
-        z = quaternion.z
-        w = quaternion.w
-        # Calculate yaw
-        siny_cosp = 2.0 * (w * z + x * y)
-        cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
-        return math.atan2(siny_cosp, cosy_cosp)
+        # Control the robot based on the goal
+        self.control_robot(x, y, yaw)
 
     def control_robot(self, current_x, current_y, current_yaw):
         goal_x, goal_y, goal_yaw = self.goal
         linear_x = 0.0
         linear_y = 0.0
         angular_z = 0.0
+        # Define thresholds
         threshold = 0.15  # Threshold for x and y
         yaw_threshold = 0.1  # Threshold for yaw radian
 
-        if self.state == 'WAIT_FOR_P':
-            self.get_logger().info("Waiting for 'P' to start moving to Point A...")
-            self.wait_for_response('P')  # Wait for 'P'
-            self.state = 'ALIGN_YAW'  # Transition to aligning yaw after receiving 'P'
-            return  # Exit to prevent further processing
-
-        elif self.state == 'ALIGN_YAW':
+        if self.state == 'ALIGN_YAW':
+            # Calculate the desired yaw angle based on the goal yaw
             desired_yaw = goal_yaw
+
+            # Normalize the yaw difference to be within -π to π
             yaw_difference = desired_yaw - current_yaw
             if yaw_difference > math.pi:
                 yaw_difference -= 2 * math.pi
             elif yaw_difference < -math.pi:
                 yaw_difference += 2 * math.pi
 
-            if abs(yaw_difference) > yaw_threshold:
-                angular_z = 0.5 if yaw_difference > 0 else -0.5
+            # Control logic for yaw adjustment
+            if abs(yaw_difference) > yaw_threshold:  # Threshold to avoid oscillation
+                if yaw_difference > 0:
+                    angular_z = 0.5  # Left spin speed
+                else:
+                    angular_z = -0.5  # Right spin speed
+                linear_x = 0.0
+                linear_y = 0.0
             else:
+                # Stop spinning if within threshold
                 angular_z = 0.0
                 self.state = 'MOVE_X'  # Transition to moving in x direction
-
+		
         elif self.state == 'MOVE_X':
+            time.sleep(1.5)
+             # Check for obstacles in front
             if self.distances['front']['static'] < 0.5:
                 self.get_logger().info("Obstacle detected in front! Stopping the robot.")
                 linear_x = 0.0
-                self.send_command(linear_x, linear_y, angular_z)
-                return
-
-            distance_to_goal_x = goal_x - current_x
-            if abs(distance_to_goal_x) < threshold:
-                linear_x = 0.0
-                self.state = 'MOVE_Y'  # Transition to moving in y direction
+                linear_y = 0.0
+                angular_z = 0.0
+                self.send_command(linear_x, linear_y, angular_z)  # Send stop command
+                return  # Exit the function to prevent further movement
             else:
-        # Move towards the goal in x direction
-                if distance_to_goal_x > 0:
-                    if distance_to_goal_x < 0.1:
-                        linear_x = 0.05
-                    else:
-                        linear_x = 0.06
+                distance_to_goal_x = goal_x - current_x
+                if abs(distance_to_goal_x) < threshold:
+        # Stop if within threshold for x
+                    linear_x = 0.0
+                    self.state = 'MOVE_Y'  # Transition to moving in y direction
                 else:
-                    if distance_to_goal_x > -0.1:
-                        linear_x = -0.05
-                    else:
-                        linear_x = -0.06
+        # Move towards the goal in x direction
+                     if distance_to_goal_x > 0:
+                        if distance_to_goal_x < 0.1:
+                            linear_x = 0.05
+                        else:
+                            linear_x = 0.06
+                     else:
+                        if distance_to_goal_x > -0.1:
+                            linear_x = -0.05
+                        else:
+                            linear_x = -0.06
 
-            linear_y = 0.0
-            angular_z = 0.0
-
+                linear_y = 0.0
+                angular_z = 0.0
+                	
+                 
+           
         elif self.state == 'MOVE_Y':
+            time.sleep(1)
+            # Calculate the distance to the goal in y
+
+
             distance_to_goal_y = goal_y - current_y
+
+            # Check if within threshold for y
             if abs(distance_to_goal_y) < threshold:
+                # Stop if within threshold for y
                 linear_y = 0.0
                 self.send_command(0.0, 0.0, 0.0)  # Stop the robot
+                
                 self.get_logger().info("Reached goal. Checking final position and yaw...")
-
-                if (abs(current_x - goal_x) < threshold and 
-                    abs(current_y - goal_y) < threshold and 
-                    abs(current_yaw - goal_yaw) < yaw_threshold):
+                
+                # Check if the robot is at the goal and aligned
+                if abs(current_x - goal_x) < threshold and abs(current_y - goal_y) < threshold and abs(current_yaw - goal_yaw) < yaw_threshold:
                     self.get_logger().info(f"Robot has reached goal at Point {'A' if self.current_goal_index == 0 else 'B' if self.current_goal_index == 1 else 'C'}.")
-                    self.send_character('A' if self.current_goal_index == 0 else 'B' if self.current_goal_index == 1 else 'C')
-                    self.wait_for_response('N' if self.current_goal_index < 2 else 'M')
-                    self.current_goal_index += 1
+     
+                    
+                    if self.current_goal_index == 0:  # If at Point A again
+                        self.send_command(0.0, 0.0, 0.0)
+                        self.get_logger().info("Waiting 'P'")
+                        self.wait_for_response('P')  # Wait for 'N'
+                    self.current_goal_index += 1  # Move to the next goal
+                        
                     if self.current_goal_index < len(self.goals):
                         next_goal = self.goals[self.current_goal_index]
                         self.set_goal(*next_goal)
-                        self.state = 'ALIGN_YAW'  # Re-align yaw for the next goal
+                        d =abs(current_x - goal_x) 
+                        time.sleep(4)
+                        self.get_logger().info(f'ZZ:{d}')
+                        if self.current_goal_index == 1:  # Point B
+                         
+                            time.sleep(1)  # Wait for 5 seconds at Point B
+                            self.current_goal_index += 1  # Move to the next goal
+                            
+
+                        if self.current_goal_index == 2:  # Point C
+                            time.sleep(1)  # Wait for 3 seconds at Point C
+                            self.get_logger().info("Reached goal B. Sending 'A'...")
+                            self.send_character('A')  # Send 'B' to the character port
+                            
+                            self.get_logger().info("Waiting 'N'")
+                            self.wait_for_response('N')  # Wait for 'N'
+                            self.get_logger().info("Received 'N', proceeding to Point C.")
+                         
+                            self.current_goal_index += 1  # Move to the next goal
+                        if self.current_goal_index == 3:  # Point C
+                            time.sleep(1)  # Wait for 3 seconds at Point C
+                            self.get_logger().info("Reached goal C. Sending 'C'...")
+                            self.send_character('I')
+                            self.get_logger().info("Waiting 'M'")
+                            self.wait_for_response('M')
+                            self.get_logger().info("Received 'M', proceeding to Point A.")
+                           
+                            self.current_goal_index += 1
+                       
+                            
+                    else:
+                    	
+                      self.get_logger().info("All goals reached. Returning to Point A.")
+                      self.set_goal(0.0, 0.0, 0.0)  # Return to Point A
+                    	
                 else:
                     self.get_logger().info("Robot is not aligned. Re-evaluating position...")
                     self.state = 'ALIGN_YAW'  # Re-evaluate yaw alignment
@@ -223,23 +283,68 @@ class TransformListenerNode(Node):
                             linear_y = -0.07
                 linear_x = 0.0
                 angular_z = 0.0
-                 
 
+        # Send command to the robot
         self.send_command(linear_x, linear_y, angular_z)
 
     def send_command(self, linear_x, linear_y, angular_z):
-        """Send movement commands to the robot."""
-        command = f"{linear_x},{linear_y},{angular_z}\n"
-        self.serial_port.write (command.encode('utf-8'))
-        self.get_logger().info(f"Sent command: {command.strip()}")
+        if self.command_in_progress:
+            self.get_logger().warn("Previous command still in progress. Please wait.")
+            return
 
+        # Check if the serial port is open
+        if self.serial_port is None or not self.serial_port.is_open:
+            self.get_logger().warn("Cannot send command: Port is not open.")
+            return
+
+        self.command_in_progress = True
+        try:
+            wheel_radius = 0.0485  # Adjust to your robot's wheel radius
+            wheel_base = 0.38     # Distance between front and rear wheels
+
+            # Calculate individual wheel velocities
+            front_left_velocity = (linear_x - linear_y - (wheel_base * angular_z / 2))
+            front_right_velocity = (linear_x + linear_y + (wheel_base * angular_z / 2))
+            rear_left_velocity = (linear_x + linear_y - (wheel_base * angular_z / 2))
+            rear_right_velocity = (linear_x - linear_y + (wheel_base * angular_z / 2))
+
+           # Check if velocities are within the range -0.27 to 0.27
+            if (abs(front_left_velocity) > 0.27 or
+                abs(front_right_velocity) > 0.27 or
+                abs(rear_left_velocity) > 0.27 or
+                abs(rear_right_velocity) > 0.27):
+                self.get_logger().warn("One or more velocities are out of range. Command not sent.")
+                return  # Skip sending the command if any velocity is out of range
+
+            # Scale velocities if necessary
+            front_left_velocity *= 2.0
+            front_right_velocity *= 2.0
+            rear_left_velocity *= 2.0
+            rear_right_velocity *= 2.0
+
+            # Round velocities to two decimal places
+            front_left_velocity = round(front_left_velocity, 2)
+            front_right_velocity = round(front_right_velocity, 2)
+            rear_left_velocity = round(rear_left_velocity, 2)
+            rear_right_velocity = round(rear_right_velocity, 2)
+
+            # Send the new command to the STM32
+            command = f"c:{front_left_velocity},{front_right_velocity},{rear_left_velocity},{rear_right_velocity}\n"
+            self.serial_port.write(command.encode())
+          
+            self.get_logger().info(f"Sending command: {command.strip()}")
+
+        except ValueError:
+            self.get_logger().error("Invalid input. Please enter numeric values.")
+        finally:
+            self.command_in_progress = False  # Reset the state variable
     def send_character(self, character):
-        """Send a character to the robot via serial."""
+        """Send a character to the character serial port."""
         self.character_port.write(character.encode('utf-8'))
-        self.get_logger().info(f"Sent character: {character}")
+        self.get_logger().info(f"Character sent: {character.strip()}")
 
     def wait_for_response(self, expected_response):
-         """Wait for a specific response from the character serial port."""
+        """Wait for a specific response from the character serial port."""
         self.get_logger().info(f"Waiting for response '{expected_response}'...")
         while True:
             try:
@@ -253,10 +358,23 @@ class TransformListenerNode(Node):
             except FileNotFoundError:
                 pass
             time.sleep(0.1)
+       
+
+    def quaternion_to_yaw(self, quaternion):
+        """Convert quaternion to yaw angle."""
+        x = quaternion.x
+        y = quaternion.y
+        z = quaternion.z
+        w = quaternion.w
+        # Calculate yaw
+        siny_cosp = 2.0 * (w * z + x * y)
+        cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
+        return math.atan2(siny_cosp, cosy_cosp)
 
 def main(args=None):
     rclpy.init(args=args)
     node = TransformListenerNode()
+    
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
