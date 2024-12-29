@@ -220,15 +220,15 @@ class TransformListenerNode(Node):
                             self.wait_for_response('N')  # Wait for 'N'
                             self.get_logger().info("Received 'N', proceeding to Point C.")
                             self.get_logger().info(f'C:{self.current_goal_index}')
-                        if self.current_goal_index == 3:
-                            time.sleep(1)  # Wait for 3 seconds at Poi
-                            self.get_logger().info("Reached goal C. Sending 'C'...")
-                            self.send_character('I')
-                            self.get_logger().info("Waiting 'M'")
-                            self.wait_for_response('M')
-                            self.get_logger().info("Received 'M', proceeding to Point A.")
-                            self.get_logger().info(f'A:{self.current_goal_index}')
+           
                     else:
+                        time.sleep(1)  # Wait for 3 seconds at Poi
+                        self.get_logger().info("Reached goal C. Sending 'C'...")
+                        self.send_character('I')
+                        self.get_logger().info("Waiting 'M'")
+                        self.wait_for_response('M')
+                        self.get_logger().info("Received 'M', proceeding to Point A.")
+                        self.get_logger().info(f'A:{self.current_goal_index}')
                         self.get_logger().info("All goals reached. Returning to Point A.")
                         self.set_goal(0.0, 0.0, 0.0)  # Return to Point A
                 else:
