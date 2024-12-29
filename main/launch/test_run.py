@@ -200,18 +200,22 @@ class TransformListenerNode(Node):
                 if abs(current_x - goal_x) < threshold and abs(current_y - goal_y) < threshold and abs(current_yaw - goal_yaw) < yaw_threshold:
                     self.get_logger().info(f"Robot has reached goal at Point {'A' if self.current_goal_index == 0 else 'B' if self.current_goal_index == 1 else 'C'}.")
                     if self.current_goal_index == 0:  # If at Point A again
-                        self.send_command(0.0, 0.0, 0.0)  # Send stop command
-			
-		    	self.get_logger().info("Waiting 'P'")
-                    	self.wait_for_response('P')  # Wait for 'N'	    
+                        self.send_command(0.0, 0.0, 0.0)
+                        self.get_logger().info("Waiting 'P'")
+                        self.wait_for_response('P')  # Wait for 'N'	    
                     self.current_goal_index += 1  # Move to the next goal
                     if self.current_goal_index < len(self.goals):
-			self.get_logger().info(f"Do dai {len(self.goals)}")
+			
                         next_goal = self.goals[self.current_goal_index]
                         self.set_goal(*next_goal)  # Set the next goal
 			    
                         if self.current_goal_index == 1:  # Point B
                             time.sleep(5)  # Wait for 5 seconds at Point B
+                            self.get_logger().info("Reached goal B. Sending 'A'...")
+                            self.send_character('A')  # Send 'B' to the character port         
+                            self.get_logger().info("Waiting 'N'")
+                            self.wait_for_response('N')  # Wait for 'N'
+                            self.get_logger().info("Received 'N', proceeding to Point C.")
                         if self.current_goal_index == 2:  # Point C
                             time.sleep(3)  # Wait for 3 seconds at Point C
                     else:
