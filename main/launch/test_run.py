@@ -206,6 +206,7 @@ class TransformListenerNode(Node):
                     	self.wait_for_response('P')  # Wait for 'N'	    
                     self.current_goal_index += 1  # Move to the next goal
                     if self.current_goal_index < len(self.goals):
+			self.get_logger().info(f"Do dai {len(self.goals)}")
                         next_goal = self.goals[self.current_goal_index]
                         self.set_goal(*next_goal)  # Set the next goal
 			    
