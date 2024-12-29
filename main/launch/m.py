@@ -119,10 +119,14 @@ class TransformListenerNode(Node):
         self.control_robot(x, y, yaw)
 
     def control_robot(self, current_x, current_y, current_yaw):
-        goal_x, goal_y, goal_yaw = self.goal
+        self.get_logger().info(f'Could not get transform: {self.goal}')
+        goal_x  = self.goal[0]
+        goal_y = self.goal[1]
+        goal_yaw = self.goal[2]
         linear_x = 0.0
         linear_y = 0.0
         angular_z = 0.0
+        self.get_logger().info(f'Could not get transform: {self.goal}')
         # Define thresholds
         threshold = 0.15  # Threshold for x and y
         yaw_threshold = 0.1  # Threshold for yaw radian
