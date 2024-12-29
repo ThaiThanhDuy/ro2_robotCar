@@ -167,14 +167,14 @@ class TransformListenerNode(Node):
         # Move towards the goal in x direction
                      if distance_to_goal_x > 0:
                         if distance_to_goal_x < 0.1:
-                            linear_x = 0.05
+                            linear_x = 0.03
                         else:
-                            linear_x = 0.06
+                            linear_x = 0.04
                      else:
                         if distance_to_goal_x > -0.1:
-                            linear_x = -0.05
+                            linear_x = -0.03
                         else:
-                            linear_x = -0.06
+                            linear_x = -0.04
 
                 linear_y = 0.0
                 angular_z = 0.0
@@ -201,10 +201,14 @@ class TransformListenerNode(Node):
                     self.get_logger().info(f"Robot has reached goal at Point {'A' if self.current_goal_index == 0 else 'B' if self.current_goal_index == 1 else 'C'}.")
                     if self.current_goal_index == 0:  # If at Point A again
                         self.send_command(0.0, 0.0, 0.0)  # Send stop command
+			
+		    	self.get_logger().info("Waiting 'P'")
+                    	self.wait_for_response('P')  # Wait for 'N'	    
                     self.current_goal_index += 1  # Move to the next goal
                     if self.current_goal_index < len(self.goals):
                         next_goal = self.goals[self.current_goal_index]
                         self.set_goal(*next_goal)  # Set the next goal
+			    
                         if self.current_goal_index == 1:  # Point B
                             time.sleep(5)  # Wait for 5 seconds at Point B
                         if self.current_goal_index == 2:  # Point C
@@ -228,9 +232,9 @@ class TransformListenerNode(Node):
                         return  # Exit the function to prevent further movement
                     else:
                         if distance_to_goal_y < 0.1:
-                            linear_y = 0.04
+                            linear_y = 0.03
                         else:
-                            linear_y = 0.07 
+                            linear_y = 0.04 
                 else:
                     if self.distances['right']['static'] < 0.15:
                         self.get_logger().info("Obstacle detected on the right! Stopping the robot.")
@@ -241,9 +245,9 @@ class TransformListenerNode(Node):
                         return  # Exit the function to prevent further movement
                     else :
                         if distance_to_goal_y > -0.1:
-                            linear_y = -0.04
+                            linear_y = -0.03
                         else:
-                            linear_y = -0.07
+                            linear_y = -0.04
                 linear_x = 0.0
                 angular_z = 0.0
 
