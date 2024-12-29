@@ -55,7 +55,7 @@ class TransformListenerNode(Node):
             'Southeast': {'static': float('inf')},
             
         }
-	
+	self.goal_x=0.0
         # Flag to indicate if obstacles were detected
         self.obstacles_detected = False
         self.obstacle_threshold = 0.5
@@ -120,7 +120,7 @@ class TransformListenerNode(Node):
 
     def control_robot(self, current_x, current_y, current_yaw):
         self.get_logger().info(f'Could not get transform: {self.goal}')
-        goal_x  = self.goal[0]
+        self.goal_x  = self.goal[0]
         goal_y = self.goal[1]
         goal_yaw = self.goal[2]
         linear_x = 0.0
@@ -166,7 +166,7 @@ class TransformListenerNode(Node):
                 self.send_command(linear_x, linear_y, angular_z)  # Send stop command
                 return  # Exit the function to prevent further movement
             else:
-                distance_to_goal_x = goal_x - current_x
+                distance_to_goal_x = self.goal_x - current_x
                 if abs(distance_to_goal_x) < threshold:
         # Stop if within threshold for x
                     linear_x = 0.0
@@ -205,7 +205,7 @@ class TransformListenerNode(Node):
                 self.get_logger().info("Reached goal. Checking final position and yaw...")
                 
                 # Check if the robot is at the goal and aligned
-                if abs(current_x - goal_x) < threshold and abs(current_y - goal_y) < threshold and abs(current_yaw - goal_yaw) < yaw_threshold:
+                if abs(current_x - self.goal_x) < threshold and abs(current_y - goal_y) < threshold and abs(current_yaw - goal_yaw) < yaw_threshold:
                     self.get_logger().info(f"Robot has reached goal at Point {'A' if self.current_goal_index == 0 else 'B' if self.current_goal_index == 1 else 'C'}.")
      
                     
@@ -218,7 +218,7 @@ class TransformListenerNode(Node):
                     if self.current_goal_index < len(self.goals):
                         next_goal = self.goals[self.current_goal_index]
                         self.set_goal(*next_goal)
-                        d =abs(current_x - goal_x) 
+                        d =abs(current_x - self.goal_x) 
                         time.sleep(4)
                         self.get_logger().info(f'ZZ:{d}')
                         if self.current_goal_index == 1:  # Point B
