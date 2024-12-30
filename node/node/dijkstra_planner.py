@@ -38,11 +38,12 @@ class DijkstraPlanner(Node):
             # Log the origin of the cost map
         origin_x = msg.info.origin.position.x
         origin_y = msg.info.origin.position.y
-        self.get_logger().info(f'Cost map origin: x={origin_x}, y={origin_y}')
+        self.get_logger().info(f'G={self.goal_position}, C={self.current_position}')
 
 
         # Call Dijkstra's algorithm to compute the path
         path = self.compute_dijkstra(self.current_position, self.goal_position)
+        
         self.path_publisher.publish(String(data=str(path)))
 
         # If a path is found, generate and publish velocity commands
