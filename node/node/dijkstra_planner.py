@@ -35,6 +35,11 @@ class DijkstraPlanner(Node):
         # Process the received local cost map
         self.get_logger().info('Received local cost map')
         self.cost_map = np.array(msg.data).reshape((msg.info.height, msg.info.width))
+            # Log the origin of the cost map
+        origin_x = msg.info.origin.position.x
+        origin_y = msg.info.origin.position.y
+        self.get_logger().info(f'Cost map origin: x={origin_x}, y={origin_y}')
+
 
         # Call Dijkstra's algorithm to compute the path
         path = self.compute_dijkstra(self.current_position, self.goal_position)
