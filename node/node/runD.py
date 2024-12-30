@@ -4,12 +4,9 @@ from tf2_ros import Buffer, TransformListener
 from geometry_msgs.msg import TransformStamped
 import math
 import serial  # Ensure you have the pyserial package installed
+import time
 from sensor_msgs.msg import LaserScan
 import numpy as np
-from nav_msgs.msg import OccupancyGrid
-from geometry_msgs.msg import Twist
-from std_msgs.msg import String
-import heapq
 
 class TransformListenerNode(Node):
     def __init__(self):
@@ -26,53 +23,44 @@ class TransformListenerNode(Node):
         # Timer to periodically get the transformation
         self.timer = self.create_timer(0.1, self.timer_callback)  # 0.1 second interval
 
+        # Goal parameters (x, y, yaw)
+        self.goal = (0.0, 0.0, 0.0)  # Initialize goal (x, y, yaw)
+        self.state = 'ALIGN_YAW'  # Initial state
+
         # Define the sequence of goals
         self.goals = [
             (0.0, 0.0, 0.0),  # Point A
             (1.0, 0.0, 0.0),  # Point B
-            (2.0, 0.0, 0.0)   # Point C
+            (1.0, 1.0, 0.0),  # Point C
+            (3.0, 1.0, 0.0),  # Point D
+            (3.0, 0.0, 0.0),  # Point E
+            (0.0, 0.0, 0.0),  # Point F
+
         ]
         self.current_goal_index = 0  # Start with the first goal
-        self.goal = self.goals[self.current_goal_index]  # Initialize goal
-
+        
         self.scan_subscriber = self.create_subscription(
             LaserScan,
             '/scan',
             self.scan_callback,
             10
         )
-
-        # Initialize distances dictionary
+          # Initialize distances dictionary
         self.distances = {
-            'front': float('inf'),
-            'back': float('inf'),
-            'left': float('inf'),
-            'right': float('inf'),
+            'front': {'static': float('inf')},
+            'back': {'static': float('inf')},
+            'left': {'static': float('inf')},
+            'right': {'static': float('inf')},
+            'Northeast': {'static': float('inf')},
+            'Southwest': {'static': float('inf')},
+            'Northwest': {'static': float('inf')},
+            'Southeast': {'static': float('inf')},
+            
         }
 
         # Flag to indicate if obstacles were detected
         self.obstacles_detected = False
-        self.obstacle_threshold = 0.5
-
-        # Subscribers
-        self.local_costmap_subscriber = self.create_subscription(
-            OccupancyGrid,
-            'local_costmap/costmap',
-            self.local_costmap_callback,
-            10
-        )
-
-        # Publisher for the path
-        self.path_publisher = self.create_publisher(String, 'path', 10)
-
-        # Publisher for velocity commands
-        self.cmd_vel_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
-
-        # Initialize the cost map
-        self.cost_map = None
-
-        self.current_position = (0.0, 0.0)  # Example starting position
-
+        self.obstacle_threshold = 0.5  # Threshold for obstacle detection
     def scan_callback(self, msg):
         # Get the number of ranges
         num_ranges = len(msg.ranges)
@@ -83,16 +71,31 @@ class TransformListenerNode(Node):
             'back': 0,   # 180 degrees
             'left': (3 * num_ranges) // 4,   # 90 degrees
             'right': num_ranges // 4 , # 270 degrees
+            'Northeast': num_ranges // 8,                # 45 degrees
+            'Southwest': 5 * num_ranges // 8,             # 225 degrees
+            'Northwest': 3 * num_ranges // 8,             # 135 degrees
+            'Southeast': 7 * num_ranges // 8             # 315 degrees
         }
 
         # Calculate distances for each direction
         for direction, index in directions.items():
-            distance = msg.r anges[index]
+            distance = msg.ranges[index]
             if distance < 1.0:  # Check if the distance is less than 1 meter
-                self.distances[direction] = min(self.distances[direction], distance)
+                # Here, we would need additional logic to classify the obstacle
+                # For demonstration, we will assume all detected obstacles are static
+                self.distances[direction]['static'] = min(self.distances[direction]['static'], distance)
                 self.obstacles_detected = True  # Set flag to indicate obstacles are detected
             else:
-                self.distances[direction] = float('inf')
+                # Reset the distance if no obstacle is detected
+                self.distances[direction]['static'] = float('inf')
+
+
+
+	
+    def set_goal(self, x, y, yaw):
+        """Set the goal position and orientation."""
+        self.goal = (x, y, yaw)
+        self.get_logger().info(f"Goal set to: x={x}, y={y}, yaw={yaw}")
 
     def timer_callback(self):
         try:
@@ -112,9 +115,6 @@ class TransformListenerNode(Node):
 
         # Log the current position
         self.get_logger().info(f'Current Position: x={x}, y={y}, Yaw={yaw}')
-        
-        # Update current position
-        self.current_position = (x, y)
 
         # Control the robot based on the goal
         self.control_robot(x, y, yaw)
@@ -122,102 +122,142 @@ class TransformListenerNode(Node):
     def control_robot(self, current_x, current_y, current_yaw):
         goal_x, goal_y, goal_yaw = self.goal
 
-        self.get_logger().info(f'Current Position: {self.current_position}, Goal Position: {self.goal}')
+        # Define thresholds
+        threshold = 0.15  # Threshold for x and y
+        yaw_threshold = 0.2  # Threshold for yaw
 
-        # Call Dijkstra's algorithm to compute the path
-        path = self.compute_dijkstra(self.current_position, self.goal)
+        if self.state == 'ALIGN_YAW':
+            # Calculate the desired yaw angle based on the goal yaw
+            desired_yaw = goal_yaw
 
-        if path:
-            self.path_publisher.publish(String(data=str(path)))
-            self.follow_path(path)
+            # Normalize the yaw difference to be within -π to π
+            yaw_difference = desired_yaw - current_yaw
+            if yaw_difference > math.pi:
+                yaw_difference -= 2 * math.pi
+            elif yaw_difference < -math.pi:
+                yaw_difference += 2 * math.pi
 
-    def compute_dijkstra(self, start, goal):
-        # Check if the cost map is available
-        if self.cost_map is None:
-            self.get_logger().warn('Cost map not available')
-            return []
+            # Control logic for yaw adjustment
+            if abs(yaw_difference) > yaw_threshold:  # Threshold to avoid oscillation
+                if yaw_difference > 0:
+                    angular_z = 0.2  # Left spin speed
+                else:
+                    angular_z = -0.2  # Right spin speed
+                linear_x = 0.0
+                linear_y = 0.0
+            else:
+                # Stop spinning if within threshold
+                angular_z = 0.0
+                self.state = 'MOVE_X'  # Transition to moving in x direction
+		
+        elif self.state == 'MOVE_X':
+            time.sleep(1.5)
+             # Check for obstacles in front
+            if self.distances['front']['static'] < 0.5:
+                self.get_logger().info("Obstacle detected in front! Stopping the robot.")
+                linear_x = 0.0
+                linear_y = 0.0
+                angular_z = 0.0
+                self.send_command(linear_x, linear_y, angular_z)  # Send stop command
+                return  # Exit the function to prevent further movement
+            else:
+                distance_to_goal_x = goal_x - current_x
+                if abs(distance_to_goal_x) < threshold:
+        # Stop if within threshold for x
+                    linear_x = 0.0
+                    self.state = 'MOVE_Y'  # Transition to moving in y direction
+                else:
+        # Move towards the goal in x direction
+                     if distance_to_goal_x > 0:
+                        if distance_to_goal_x < 0.1:
+                            linear_x = 0.04
+                        else:
+                            linear_x = 0.06
+                     else:
+                        if distance_to_goal_x > -0.1:
+                            linear_x = -0.04
+                        else:
+                            linear_x = -0.06
 
-        rows, cols = self.cost_map.shape
-        distances = {start: 0}  # Distance from start to each node
-        priority_queue = [(0, start)]  # Priority queue for exploring nodes
-        came_from = {}  # To reconstruct the path
+                linear_y = 0.0
+                angular_z = 0.0
+                	
+                 
+           
+        elif self.state == 'MOVE_Y':
+            time.sleep(1)
+            # Calculate the distance to the goal in y
 
-        while priority_queue:
-            current_distance, current_node = heapq.heappop(priority_queue)
 
-            # If we reached the goal, reconstruct and return the path
-            if current_node == goal:
-                return self.reconstruct_path(came_from, current_node)
+            distance_to_goal_y = goal_y - current_y
 
-            # Explore neighbors (4 possible directions)
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                neighbor = (current_node[0] + dx, current_node[1] + dy)
+            # Check if within threshold for y
+            if abs(distance_to_goal_y) < threshold:
+                # Stop if within threshold for y
+                linear_y = 0.0
+                self.send_command(0.0, 0.0, 0.0)  # Stop the robot
+                
+                self.get_logger().info("Reached goal. Checking final position and yaw...")
+                
+                # Check if the robot is at the goal and aligned
+                if abs(current_x - goal_x) < threshold and abs(current_y - goal_y) < threshold and abs(current_yaw - goal_yaw) < yaw_threshold:
+                    self.get_logger().info(f"Robot has reached goal at Point {'A' if self.current_goal_index == 0 else 'B' if self.current_goal_index == 1 else 'C'}.")
+                    if self.current_goal_index == 0:  # If at Point A again
+                        self.send_command(0.0, 0.0, 0.0)  # Send stop command
+                    self.current_goal_index += 1  # Move to the next goal
+                    if self.current_goal_index < len(self.goals):
+                        next_goal = self.goals[self.current_goal_index]
+                        self.set_goal(*next_goal)  # Set the next goal
+                        if self.current_goal_index == 1:  # Point B
+                            time.sleep(3)  # Wait for 5 seconds at Point B
+                        if self.current_goal_index == 2:  # Point C
+                            time.sleep(3)  # Wait for 3 seconds at Point C
+                        if self.current_goal_index == 3:  # Point D
+                            time.sleep(3)  # Wait for 3 seconds at Point D
+                        if self.current_goal_index == 4:  # Point E
+                            time.sleep(3)  # Wait for 3 seconds at Point E
+                        if self.current_goal_index == 5:  # Point F
+                            time.sleep(3)  # Wait for 3 seconds at Point F
+                    else:
+                        self.get_logger().info("All goals reached. Returning to Point A.")
+                        self.set_goal(0.0, 0.0, 0.0)  # Return to Point A
+                else:
+                    self.get_logger().info("Robot is not aligned. Re-evaluating position...")
+                    self.state = 'ALIGN_YAW'  # Re-evaluate yaw alignment
+                return
+            else:
+                # Move towards the goal in y direction
+                if distance_to_goal_y > 0:
+                    if self.distances['left']['static'] < 0.15:
+                        self.get_logger().info("Obstacle detected on the left! Stopping the robot.")
+                        linear_y = 0.0
+                        linear_x = 0.0
+                        angular_z = 0.0
+                        self.send_command(linear_x, linear_y, angular_z)  # Send stop command
+                        return  # Exit the function to prevent further movement
+                    else:
+                        if distance_to_goal_y < 0.1:
+                            linear_y = 0.04
+                        else:
+                            linear_y = 0.06 
+                else:
+                    if self.distances['right']['static'] < 0.15:
+                        self.get_logger().info("Obstacle detected on the right! Stopping the robot.")
+                        linear_y = 0.0
+                        linear_x = 0.0
+                        angular_z = 0.0
+                        self.send_command(linear_x, linear_y, angular_z)  # Send stop command
+                        return  # Exit the function to prevent further movement
+                    else :
+                        if distance_to_goal_y > -0.1:
+                            linear_y = -0.04
+                        else:
+                            linear_y = -0.06
+                linear_x = 0.0
+                angular_z = 0.0
 
-                # Check if the neighbor is within bounds and not an obstacle
-                if (0 <= neighbor[0] < rows and
-                        0 <= neighbor[1] < cols and
-                        self.cost_map[neighbor] < 255):  # Check if not an obstacle
-                    distance = current_distance + 1  # Increment distance
-
-                    # If this path to neighbor is shorter, record it
-                    if neighbor not in distances or distance < distances[neighbor]:
-                        distances[neighbor] = distance
-                        came_from[neighbor] = current_node
-                        heapq.heappush(priority_queue, (distance, neighbor))
-
-        return []  # Return an empty path if no path is found
-
-    def reconstruct_path(self, came_from, current):
-        total_path = [current]
-        while current in came_from:
-            current = came_from[current]
-            total_path.append(current)
-        return total_path[::-1]  # Return reversed path
-
-    def follow_path(self, path):
-        # Generate velocity commands to follow the path
-        if len(path) < 2:
-            return  # No movement if the path is too short
-
-        # Get the next position in the path
-        next_position = path[1]  # The next position to move towards
-        current_x, current_y = self.current_position
-
-        # Calculate the direction to the next position
-        target_x, target_y = next_position
-        direction_x = target_x - current_x
-        direction_y = target_y - current_y
-
-        # Calculate the distance to the next position
-        distance = np.sqrt(direction_x**2 + direction_y**2)
-
-        # Create a Twist message for velocity commands
-        cmd_vel = Twist()
-
-        # Set linear velocity (move towards the target)
-        max_linear_speed = 0.5  # Maximum speed
-        min_distance = 0.1  # Minimum distance to consider "close enough"
-
-        if distance > min_distance:
-            # Set linear velocities in both x and y directions
-            cmd_vel.linear.x = min(distance, max_linear_speed) * (direction_x / distance)  # Proportional control in x
-            cmd_vel.linear.y = min(distance, max_linear_speed) * (direction_y / distance)  # Proportional control in y
-        else:
-            cmd_vel.linear.x = 0.0  # Stop if close enough to the target
-            cmd_vel.linear.y = 0.0  # Stop if close enough to the target
-
-        # Set angular velocity (turn towards the target)
-        if distance > 0:
-            angle_to_target = np.arctan2(direction_y, direction_x)
-            cmd_vel.angular.z = angle_to_target - current_yaw  # Set angular velocity to turn towards the target
-        else:
-            cmd_vel.angular.z = 0.0  # No rotation if already at the target
-
-        # Log the cmd_vel values
-        self.get_logger().info(f'cmd_vel - Linear X: {cmd_vel.linear.x}, Linear Y: {cmd_vel.linear.y}, Angular Z: {cmd_vel.angular.z}')
-
-        # Publish the velocity command
-        self.send_command(cmd_vel.linear.x, cmd_vel.linear.y, cmd_vel.angular.z)
+        # Send command to the robot
+        self.send_command(linear_x, linear_y, angular_z)
 
     def send_command(self, linear_x, linear_y, angular_z):
         if self.command_in_progress:
@@ -240,7 +280,7 @@ class TransformListenerNode(Node):
             rear_left_velocity = (linear_x + linear_y - (wheel_base * angular_z / 2))
             rear_right_velocity = (linear_x - linear_y + (wheel_base * angular_z / 2))
 
-            # Check if velocities are within the range -0.27 to 0.27
+           # Check if velocities are within the range -0.27 to 0.27
             if (abs(front_left_velocity) > 0.27 or
                 abs(front_right_velocity) > 0.27 or
                 abs(rear_left_velocity) > 0.27 or
@@ -285,6 +325,7 @@ class TransformListenerNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = TransformListenerNode()
+    node.set_goal(0.0, 0.0, 0.0)  # Start at Point A
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
