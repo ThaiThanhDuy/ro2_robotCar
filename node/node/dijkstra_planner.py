@@ -11,7 +11,8 @@ class DijkstraPlanner(Node):
         super().__init__('dijkstra_planner')
 
         # Parameters
-        self.goal_position = (4, 4)  # Example goal position
+        self.goals = [(0, 0), (1, 0), (2, 0)]  # List of goals to navigate to
+        self.current_goal_index = 0  # Start with the first goal
         self.current_position = (0, 0)  # Example starting position
 
         # Subscribers
@@ -35,14 +36,13 @@ class DijkstraPlanner(Node):
         # Process the received local cost map
         self.get_logger().info('Received local cost map')
         self.cost_map = np.array(msg.data).reshape((msg.info.height, msg.info.width))
-            # Log the origin of the cost map
-        origin_x = msg.info.origin.position.x
-        origin_y = msg.info.origin.position.y
-        self.get_logger().info(f'G={self.goal_position}, C={self.current_position}')
 
+        # Log the current goal
+        current_goal = self.goals[self.current_goal_index]
+        self.get_logger().info(f'Current Goal: {current_goal}, Current Position: {self.current_position}')
 
         # Call Dijkstra's algorithm to compute the path
-        path = self.compute_dijkstra(self.current_position, self.goal_position)
+        path = self.compute_dijkstra(self.current_position, current_goal)
         
         self.path_publisher.publish(String(data=str(path)))
 
@@ -117,7 +117,7 @@ class DijkstraPlanner(Node):
         max_linear_speed = 0.5  # Maximum speed
         min_distance = 0.1  # Minimum distance to consider "close enough"
 
-        if distance > min_distance :
+        if distance > min_distance:
             # Set linear velocities in both x and y directions
             cmd_vel.linear.x = min(distance, max_linear_speed) * (direction_x / distance)  # Proportional control in x
             cmd_vel.linear.y = min(distance, max_linear_speed) * (direction_y / distance)  # Proportional control in y
@@ -140,6 +140,12 @@ class DijkstraPlanner(Node):
 
         # Update the current position to the next position
         self.current_position = next_position
+
+        # Check if the current goal has been reached
+        if next_position == self.goals[self.current_goal_index]:
+            self.current_goal_index += 1  # Move to the next goal
+            if self.current_goal_index >= len(self.goals):
+                self.get_logger().info('All goals reached!')  # All goals have been reached
 
 def main(args=None):
     rclpy.init(args=args)
